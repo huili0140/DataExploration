@@ -1,0 +1,48 @@
+---
+title: "The American Moms"
+output:
+  html_document:
+    theme: cerulean
+---
+_________________________________________________________________________________________________
+
+
+```{r echo=FALSE}
+library(data.table)
+cols <- c("PAOC", "AGEP", "MAR", "ESR", "SCHL", "WAGP")
+pusa <- fread("ss13pusa.csv", select = cols)
+pusb <- fread("ss13pusb.csv", select = cols)
+pus <- rbind(pusa, pusb)
+save(pus, file = "pus.Rdata")
+
+```
+
+<!-- In the remainder of the document, add R code chunks as needed -->
+
+### Introduction:
+
+Insert introduction here...
+
+### Data:
+
+Insert data section here...
+
+### Exploratory data analysis:
+
+Insert exploratory data analysis here...
+
+### Inference:
+
+Insert inference section here...
+
+### Conclusion:
+
+Insert conclusion here...
+
+### References:
+
+Insert references here...
+
+### Appendix:
+
+Insert appendix here...
