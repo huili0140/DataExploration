@@ -8,22 +8,22 @@ ________________________________________________________________________________
 
 # Introduction
 
-The 2013 American Community Survey run by the US Census Bureau provides a rich dataset with detailed information of approximately 3.5 million households that covers topics such as ancestry, education, employment, and residency. Being a working mom myself, I'm particularly interested in a descriptive analysis of the employment status of the American moms with dependent kids younger than 18 years old.
+The 2013 American Community Survey run by the US Census Bureau provides a rich dataset with detailed information of approximately 3.5 million households regarding to topics such as ancestry, education, employment, and residency. Being a working mom myself, I'm particularly interested in a descriptive analysis of the employment status of the American moms with dependent children younger than 18 years old.
 
 ### Dataset
 
-The variables including information of region, age, marital status, presence of kids, employment status, education, and wage were read into R and saved as pus.Rdata. Male and Female less than 16 years old were removed from the dataset by removing the instances with NA in the PAOC variable.  
+The variables including information of region, age, marital status, presence of kids, employment status, education, and wage were read into R and saved as pus.Rdata. Male and Female less than 16 years old were removed from the dataset by omitting the instances with NA in the PAOC variable.  
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-library(data.table)
-cols <- c("PAOC", "ST", "AGEP", "MAR", "ESR", "COW", "SCHL", "WAGP")
-pusa <- fread("ss13pusa.csv", select = cols)
-pusb <- fread("ss13pusb.csv", select = cols)
-pus <- subset(rbind(pusa, pusb), !is.na(PAOC))
-save(pus, file = "pus.Rdata")
+#library(data.table)
+#cols <- c("PAOC", "ST", "AGEP", "MAR", "ESR", "COW", "SCHL", "WAGP")
+#pusa <- fread("ss13pusa.csv", select = cols)
+#pusb <- fread("ss13pusb.csv", select = cols)
+#pus <- subset(rbind(pusa, pusb), !is.na(PAOC))
+#save(pus, file = "pus.Rdata")
 ```
 
-The variables were labled as factor variables according to the data dictionary. The variable showing information of presence of children (PAOC) was grouped into four levels according to the presence of children and the children's ages. 
+The variables were labled as factor variables according to ACS data dictionary. The instances were classified into four groups including moms with little kids ("children under 6"), moms with old kids ("children 6 to 17"), moms with little kids and old kids ("children under 6 and 6 to 17"), and women without kids ("no children") according to the information of presence of children (PAOC). 
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(ggplot2)
@@ -67,7 +67,9 @@ prop.table(table(pus$PAOC))
 by(pus$AGEP, pus$PAOCG, summary)
 ```
 
-Being a mom with dependent kids is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent kids, and only 5.8% of them were with little kids younger than 6 years old. The age of the moms with dependent kids was almost normally distributed with a median value of 38 and interquantile range of 13. 
+### Observation
+
+Being a mom with dependent children is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent children, and only 5.8% of them were with little kids younger than 6 years old. The age distribution of the moms was bell-shaped with a median value of 38 and interquantile range of 13. The median ages of moms with little kids, moms with big kids, and moms with little and big kids were 30, 43, and 34 respectively. 
 
 ### Marital Status
 
@@ -83,7 +85,11 @@ ggplot(data, aes(center, height)) +
   ggtitle("Marital Status of the Moms")
 ```
 
-Roughly three quarters of the moms with dependent kids were married, and the married rate remained relatively constant across the three groups with kids at various ages. The majority of the single moms with little kids were never married, While the majority of the single moms with big kids were divorced or separated.
+### Observation
+
+Roughly three quarters of the moms with dependent children were married, and the proportion of the married moms remained relatively constant given the various ages of their children. The single moms with little kids were more likely to be never married, While the single moms with big kids were more likely to be divorced or separated.
+
+### Employment Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 data <- as.data.frame(prop.table(table(am$PAOC, am$ESR)))
@@ -91,29 +97,74 @@ data$margin <- prop.table(table(am$PAOC))
 data$height <- data$Freq/data$margin
 data$center <- c(0, cumsum(data$margin)[1:length(levels(am$PAOC)) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
-  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray") +
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
   xlab("Children under 6           Children 6 to 17     Children under 6 and 6 to 17") +
   ylab("Employment Status") + 
   ggtitle("Employment Status of the Moms")
 ```
 
+### Education Level
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$PAOC, am$SCHLF)))
+data <- as.data.frame(prop.table(table(am$PAOC, am$SCHL)))
 data$margin <- prop.table(table(am$PAOC))
 data$height <- data$Freq/data$margin
 data$center <- c(0, cumsum(data$margin)[1:length(levels(am$PAOC)) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
-  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray") +
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
   xlab("Children under 6           Children 6 to 17     Children under 6 and 6 to 17") +
-  ylab("Employment Status") + 
-  ggtitle("Employment Status of the Moms")
+  ylab("Education") + 
+  ggtitle("Education Level of the Moms")
 ```
 
+# Working Moms vs Stay-At-Home Moms
+
+### Age vs Employment Status
+
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$SCHLF, am$ESR), margin = 1))
-ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3)
+data <- as.data.frame(prop.table(table(am$AGEP, am$ESR), margin = 1))
+data$Var1 <- as.numeric(as.character(data$Var1))
+ggplot(subset(data, Var1 <= 72), aes(x = Var1, y = Freq, group = Var2)) + 
+  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
+  xlab("Age") +
+  ylab("Frequency") +
+  ggtitle("Age vs Employment Status")
 ```
+
+### Maritl Status vs Employment Status
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$MAR, am$ESR), margin = 1))
+ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
+  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
+  xlab("Marital Status") +
+  ylab("Frequency") +
+  ggtitle("Marital Status vs Employment Status")
+```
+
+### Education vs Employment Status
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$SCHL, am$ESR), margin = 1))
+ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
+  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
+  xlab("Education") +
+  ylab("Frequency") +
+  ggtitle("Education vs Employment Status")
+```
+
+### Type of Work
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$COW, am$ESR), margin = 2))
+data <- subset(data, Var2 == "Employed" & Var1 != "Unemployed")
+ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
+  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
+  xlab("Type of Work") +
+  ylab("Frequency") +
+  ggtitle("Type of Work vs Employment Status")
+```
+
 
 ### Inference:
 
