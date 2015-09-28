@@ -28,6 +28,8 @@ The variables were labled as factor variables according to ACS data dictionary. 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(ggplot2)
 library(dplyr)
+library(gridExtra)
+library(maps)
 load("pus.Rdata")
 
 pus$MAR <- factor(pus$MAR)
@@ -69,7 +71,7 @@ by(pus$AGEP, pus$PAOCG, summary)
 
 ### Observation
 
-Being a mom with dependent children is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent children, and only 5.8% of them were with little kids younger than 6 years old. The age distribution of the moms was bell-shaped with a median value of 38 and interquantile range of 13. The median ages of moms with little kids, moms with big kids, and moms with both were 30, 43, and 34 respectively. 
+Being a mom with dependent children is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent children, and only 5.8% of them were with little kids younger than 6 years old. The age distribution of the moms was bell-shaped with a median value of 38 and interquantile range of 13. The median ages of moms with little kids, moms with big kids, and moms with both were 30, 43, and 34  respectively. 
 
 ### Marital Status
 
@@ -80,32 +82,13 @@ data$height <- data$Freq/data$margin
 data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
   geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
-  xlab("Age") +
-  ylab("Marital Status") + 
-  ggtitle("Marital Status of the Moms")
+  labs(x = "Age", y = "Frequency", title = "Marital Status of the Moms") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
 ```
 
 ### Observation
 
-Roughly three quarters of the moms with dependent children were married, and the proportion of the married moms remained relatively constant given the various ages of their children. The single moms with little kids were more likely to be never married, While the single moms with big kids were more likely to be divorced or separated.
-
-### Employment Status
-
-```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$AGEP, am$ESR)))
-data$margin <- prop.table(table(am$AGEP))
-data$height <- data$Freq/data$margin
-data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
-ggplot(data, aes(center, height)) + 
-  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
-  xlab("Age") +
-  ylab("Employment Status") + 
-  ggtitle("Employment Status of the Moms")
-```
-
-### Observation
-
-Approximately 60% of the moms with little kids were employed and actively at work, and the percentage of employment raised to 70% in the group of moms with big kids. The lowest rate of employment (56%) was found in the group of moms with both little and big kids. 
+Roughly three quarters of the moms with dependent children were married, and the percentage of being married remained relatively constant among the moms in their 30s or 40s. The single moms at younger age were more likely to be never married, While the single moms at older age were more likely to be divorced or separated.
 
 ### Education Level
 
@@ -116,51 +99,108 @@ data$height <- data$Freq/data$margin
 data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
   geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
-  xlab("Age") +
-  ylab("Education") + 
-  ggtitle("Education Level of the Moms")
+  labs(x = "Age", y = "Frequency", title = "Education Level of the Moms") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
 ```
 
 ### Observation
 
-The younger moms with little kids showed higher education level compared to the older moms with big kids. About 40% of the moms with little kids possessed a Bachelor's degree or higher, while the proportion was only 32-35% in the groups of moms with big kids.  
+Approximately one third of the moms with dependent children possessed a Bachelor's degree or higher in total. The moms in their 30s or 40s showed higher education levels compared to the moms at their young age, eg., 17% of the moms at age 45 had a Master's degree or higher in compare to 2% of the moms at age 25. 
 
-# Working Moms vs Stay-At-Home Moms
+# To Be a Working mom or Not
 
-While it's most likely a personal choice to be a working mom or not, there might be objective factors that influence the mom's decision. 
-
-### Age vs Employment Status
+### Employment Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$AGEP, am$ESR), margin = 1))
-data$Var1 <- as.numeric(as.character(data$Var1))
-ggplot(subset(data, Var1 <= 72), aes(x = Var1, y = Freq, group = Var2)) + 
-  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
-  xlab("Age") +
-  ylab("Frequency") +
-  ggtitle("Age vs Employment Status")
+data <- as.data.frame(prop.table(table(am$AGEP, am$ESR)))
+data$margin <- prop.table(table(am$AGEP))
+data$height <- data$Freq/data$margin
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
+ggplot(data, aes(center, height)) + 
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
+  labs(x = "Age", y = "Frequency", title = "Employment Status of the Moms") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
 ```
+
+### Observation
+
+While it's largely a personal choice to be a workign mom or not, there might be objective factors that influence the mom's decision. A rough look at the plot of employmennt status showed that overall 65% of the moms were employed and active at work. The proportion of employment steadily increased with the moms' age among the moms in their 20s, 30s, or 40s, suggesting that more moms would like to continue their career track when their kids grew older. Meanwhile, the proportion of being unemployed dropped accordingly with the moms' age. 
 
 ### Maritl Status vs Employment Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
+chisq.test(table(am$MAR, am$ESR))
 data <- as.data.frame(prop.table(table(am$MAR, am$ESR), margin = 1))
 ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
   geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
-  xlab("Marital Status") +
-  ylab("Frequency") +
-  ggtitle("Marital Status vs Employment Status")
+  labs(x = "Marital Status", y = "Frequency", title = "Marital Status vs Employment Status")
 ```
+
+### Observation
+
+The Chi square test suggested a highly significant association between marital status and employment status among the moms with dependent children. The highest percentage of being employed were seen in the group of divorced moms (77%), followed with the group of separated moms (68%). These moms were more likely to be facing the double pressure of taking care of children and being financially independent. 
 
 ### Education vs Employment Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
+chisq.test(table(am$SCHL, am$ESR))
 data <- as.data.frame(prop.table(table(am$SCHL, am$ESR), margin = 1))
 ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
   geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
-  xlab("Education") +
-  ylab("Frequency") +
-  ggtitle("Education vs Employment Status")
+  labs(x = "Education", y = "Frequency", title = "Education vs Employment Status") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+### Observation
+
+The Chi square test also revealed the significant association between education and employment status among the moms. Approximately 80% of the moms with advanced degrees (Master's degree or higher) were employed and active at work, while the percentage of employment was only about 53% among the moms with high school education or lower. 
+
+### Wages of the Working Mom
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+wm <- subset(am, ESR == "Employed" & WAGP > 0)
+wm$AGEG <- cut(wm$AGEP, breaks = quantile(wm$AGEP))
+ggplot(na.omit(wm), aes(x = AGEG, y = WAGP)) + 
+  geom_boxplot(aes(fill = AGEG), colour = "gray", outlier.colour = "gray", alpha = 0.5) + 
+  coord_trans(y = "log10") + 
+  labs(x = "Age Group", y = "Wage", title = "Wages of the Working Moms")
+```
+
+
+# Working Moms across the States
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$ST, am$ESRG), margin = 1))
+data <- subset(data, Var2 == 1)
+data$state <- c('alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','district of columbia','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming')
+
+all_states <- map_data("state")
+all_states$freq <- data$Freq[match(all_states$region, data$state)]*100
+ggplot(all_states, aes(x=long, y=lat, group = group)) + 
+  geom_polygon(aes(fill = freq),colour="gray") + 
+  ggtitle("Percentage of Working Moms across the States")
+
+head(arrange(data, -Freq), 5) # The States with the highest employment rate of moms
+tail(arrange(data, -Freq), 5) # The States with the lowest employment rate of moms
+```
+
+### Observation
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+am_grouped <- group_by(am, ST)
+data <- summarise(am_grouped, wage = mean(WAGP))
+data$state <- c('alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','district of columbia','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming')
+
+all_states <- map_data("state")
+all_states$wage <- data$wage[match(all_states$region, data$state)]
+ggplot(all_states, aes(x=long, y=lat, group = group)) + 
+  geom_polygon(aes(fill = wage),colour="gray") + 
+  ggtitle("Wage of Working Moms across the States")
+
+head(arrange(data, -wage), 5) # The States with the highest wage of working moms
+tail(arrange(data, -wage), 5) # The States with the lowest wage of workign moms
 ```
 
 ### Type of Work
@@ -175,26 +215,3 @@ ggplot(data, aes(x = Var1, y = Freq, group = Var2)) +
   ggtitle("Type of Work vs Employment Status")
 ```
 
-
-### Inference:
-
-working mom --- salarity levels
-compare to working women without kids
-by age
-by education
-by class of work
-
-working mom's rate 
-salary level
-
-### Conclusion:
-
-Insert conclusion here...
-
-### References:
-
-Insert references here...
-
-### Appendix:
-
-Insert appendix here...
