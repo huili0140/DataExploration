@@ -69,18 +69,18 @@ by(pus$AGEP, pus$PAOCG, summary)
 
 ### Observation
 
-Being a mom with dependent children is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent children, and only 5.8% of them were with little kids younger than 6 years old. The age distribution of the moms was bell-shaped with a median value of 38 and interquantile range of 13. The median ages of moms with little kids, moms with big kids, and moms with little and big kids were 30, 43, and 34 respectively. 
+Being a mom with dependent children is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent children, and only 5.8% of them were with little kids younger than 6 years old. The age distribution of the moms was bell-shaped with a median value of 38 and interquantile range of 13. The median ages of moms with little kids, moms with big kids, and moms with both were 30, 43, and 34 respectively. 
 
 ### Marital Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$PAOC, am$MAR)))
-data$margin <- prop.table(table(am$PAOC))
+data <- as.data.frame(prop.table(table(am$AGEP, am$MAR)))
+data$margin <- prop.table(table(am$AGEP))
 data$height <- data$Freq/data$margin
-data$center <- c(0, cumsum(data$margin)[1:length(levels(am$PAOC)) -1]) + data$margin/2
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
   geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
-  xlab("Children under 6           Children 6 to 17     Children under 6 and 6 to 17") +
+  xlab("Age") +
   ylab("Marital Status") + 
   ggtitle("Marital Status of the Moms")
 ```
@@ -92,32 +92,42 @@ Roughly three quarters of the moms with dependent children were married, and the
 ### Employment Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$PAOC, am$ESR)))
-data$margin <- prop.table(table(am$PAOC))
+data <- as.data.frame(prop.table(table(am$AGEP, am$ESR)))
+data$margin <- prop.table(table(am$AGEP))
 data$height <- data$Freq/data$margin
-data$center <- c(0, cumsum(data$margin)[1:length(levels(am$PAOC)) -1]) + data$margin/2
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
   geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
-  xlab("Children under 6           Children 6 to 17     Children under 6 and 6 to 17") +
+  xlab("Age") +
   ylab("Employment Status") + 
   ggtitle("Employment Status of the Moms")
 ```
 
+### Observation
+
+Approximately 60% of the moms with little kids were employed and actively at work, and the percentage of employment raised to 70% in the group of moms with big kids. The lowest rate of employment (56%) was found in the group of moms with both little and big kids. 
+
 ### Education Level
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-data <- as.data.frame(prop.table(table(am$PAOC, am$SCHL)))
-data$margin <- prop.table(table(am$PAOC))
+data <- as.data.frame(prop.table(table(am$AGEP, am$SCHL)))
+data$margin <- prop.table(table(am$AGEP))
 data$height <- data$Freq/data$margin
-data$center <- c(0, cumsum(data$margin)[1:length(levels(am$PAOC)) -1]) + data$margin/2
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
 ggplot(data, aes(center, height)) + 
   geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
-  xlab("Children under 6           Children 6 to 17     Children under 6 and 6 to 17") +
+  xlab("Age") +
   ylab("Education") + 
   ggtitle("Education Level of the Moms")
 ```
 
+### Observation
+
+The younger moms with little kids showed higher education level compared to the older moms with big kids. About 40% of the moms with little kids possessed a Bachelor's degree or higher, while the proportion was only 32-35% in the groups of moms with big kids.  
+
 # Working Moms vs Stay-At-Home Moms
+
+While it's most likely a personal choice to be a working mom or not, there might be objective factors that influence the mom's decision. 
 
 ### Age vs Employment Status
 
@@ -168,7 +178,14 @@ ggplot(data, aes(x = Var1, y = Freq, group = Var2)) +
 
 ### Inference:
 
-Insert inference section here...
+working mom --- salarity levels
+compare to working women without kids
+by age
+by education
+by class of work
+
+working mom's rate 
+salary level
 
 ### Conclusion:
 
