@@ -107,7 +107,7 @@ ggplot(data, aes(center, height)) +
 
 Approximately one third of the moms with dependent children possessed a Bachelor's degree or higher. The moms in their 30s or 40s showed higher education level compared to the moms at their young age, eg., 17% of the moms at age 45 had a Master's degree or higher in comparison to 2% of the moms at age 25. 
 
-# To Be a Working mom or Not
+# The Working Moms
 
 ### Employment Status
 
@@ -124,9 +124,9 @@ ggplot(data, aes(center, height)) +
 
 ### Observation
 
-While it's largely a personal choice to be a working mom or not, there might be objective factors that influence the mom's decision. A rough look at the plot of employmennt status showed that overall 65% of the moms were employed and active at work. The proportion of employment steadily increased with the moms' age among the moms younger than 50 years old, suggesting that more moms would like to continue their career track when their kids grew older. Meanwhile, the proportion of being unemployed dropped accordingly with the moms' age. 
+While it's largely a personal choice to be a working mom or not, there might be objective factors that influence the mom's decision. A rough look at the plot of employmennt status showed that overall 65% of the moms were employed and active at work. The proportion of employment steadily increased with the moms' age among moms younger than 50 years old, suggesting that more moms continued their career track when their kids grew older. Meanwhile, the proportion of being unemployed dropped accordingly with the moms' age. 
 
-### Maritl Status vs Employment Status
+### Marital Status vs Employment Status
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 chisq.test(table(am$MAR, am$ESR))
@@ -138,7 +138,7 @@ ggplot(data, aes(x = Var1, y = Freq, group = Var2)) +
 
 ### Observation
 
-The Chi square test suggested a highly significant association between marital status and employment status among the moms with dependent children. The highest percentage of being employed were seen in the group of divorced moms (77%), followed with the group of separated moms (68%). These moms were more likely to be facing double pressure of taking care of children and being financially independent. 
+The Chi square test suggested a highly significant association between marital status and employment status among the moms with dependent children. The highest percentage of being employed were seen in the group of divorced moms (77%), followed with the group of separated moms (68%), who were more likely to be facing double pressure of taking care of children and being financially independent. 
 
 ### Education vs Employment Status
 
@@ -153,7 +153,7 @@ ggplot(data, aes(x = Var1, y = Freq, group = Var2)) +
 
 ### Observation
 
-The Chi square test also revealed the significant association between education and employment status among the moms. Approximately 80% of the moms with advanced degrees (Master's degree or higher) were employed and active at work, while the percentage of employment was only about 53% among the moms with high school education or lower. 
+The Chi square test also revealed a significant association between education and employment status among the moms. Approximately 80% of the moms with advanced degrees (Master's degree or higher) were employed and active at work, while the percentage of employment was only about 53% among the moms with high school education or lower. 
 
 ### Wages of the Working Mom
 
@@ -162,17 +162,17 @@ wm <- subset(am, ESR == "Employed" & WAGP > 1000)
 wm$AGEG <- cut(wm$AGEP, breaks = quantile(wm$AGEP))
 ggplot(na.omit(wm), aes(x = AGEG, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = AGEG), alpha = 0.5) + 
-  labs(x = "Age Group", y = "Wage on Log10 Scale", title = "Wages of the Working Moms")
+  labs(x = "Age Group", y = "Wage on Log10 Scale", title = "Wages vs Age Groups")
 ```
 
 ### Observation
 
-The instances of working moms were divided into four age groups (16 to 33, 34 to 39, 40 to 45, and 46 to 93) according to their age quantiles. When the wages were plotted according to age groups, a significant increment was shown between the first and the second age groups. The wages of working moms in the second, third and fourth age groups remained relatively on the same level.   
+The instances of working moms were divided into four age groups (16 to 33, 34 to 39, 40 to 45, and 46 to 93) according to their age quantiles. When the wages were plotted according to age groups, a significant increment was shown between the first and the second groups. The wages of working moms in the second, third and fourth age groups remained relatively on the same level.   
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 ggplot(na.omit(wm), aes(x = COW, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = COW), alpha = 0.5) + 
-  labs(x = "Field of Work", y = "Wageon Log10 Scale", title = "Wages of the Working Moms") +
+  labs(x = "Field of Work", y = "Wageon Log10 Scale", title = "Wages vs Field of Work") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
@@ -180,7 +180,7 @@ ggplot(na.omit(wm), aes(x = COW, y = log10(WAGP))) +
 
 ggplot(na.omit(wm), aes(x = MAR, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = MAR), alpha = 0.5) + 
-  labs(x = "Marital Status", y = "Wageon Log10 Scale", title = "Wages of the Working Moms") +
+  labs(x = "Marital Status", y = "Wageon Log10 Scale", title = "Wages vs Marital Status") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
@@ -188,7 +188,7 @@ ggplot(na.omit(wm), aes(x = MAR, y = log10(WAGP))) +
 
 ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = SCHL), alpha = 0.5) + 
-  labs(x = "Education", y = "Wageon Log10 Scale", title = "Wages of the Working Moms") +
+  labs(x = "Education", y = "Wageon Log10 Scale", title = "Wages vs Education") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
@@ -197,7 +197,7 @@ ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) +
 
 ### Observation
 
-The wages of working moms were plotted according to factors of field of work, marital status and education respectively. The mean wage of each age groups was also labeled on the plots with points of various colors. In addition to the higher employment rate, moms with advanced degrees were more likely to have higer wages compared to moms with lower education levels. Besides, moms working for federal government showed the highest mean wages among all categories of field of work. Still, the group of moms ages 16 to 33 represented the lowest mean wages among the four age groups. 
+The wages of working moms were plotted according to factors of field of work, marital status and education respectively, with the mean wage of each age groups labeled as points of various colors. In addition to the higher employment rate, moms with advanced degrees were more likely to have higer wages compared to moms with lower education levels. Besides, moms working for federal government showed the highest mean wages among all categories of field of work. Still, the group of moms ages 16 to 33 represented the lowest mean wages among the four age groups. 
 
 # Working Moms across the States
 
@@ -215,8 +215,8 @@ ggplot(all_states, aes(x=long, y=lat, group = group)) +
 head(arrange(data, -Freq), 5) # The States with the highest employment rate of moms
 tail(arrange(data, -Freq), 5) # The States with the lowest employment rate of moms
 
-am_grouped <- group_by(am, ST)
-data <- summarise(am_grouped, wage = mean(WAGP))
+wm_grouped <- group_by(wm, ST)
+data <- summarise(wm_grouped, wage = mean(WAGP))
 data$state <- c('alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','district of columbia','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming')
 
 all_states <- map_data("state")
@@ -231,8 +231,12 @@ tail(arrange(data, -wage), 5) # The States with the lowest wage of workign moms
 
 ### Observation
 
-There was regional differences regarding to the employment rate as well as wages of moms with dependent children. The midwest States (South Dakota, Iowa, Minnesota, Wisconsin, and Nebraska) and the southeast States (Arizona, New Mexico, California, and Utah) represented the extreme cases of highest and lowest rates of moms being employed. The highest wages of working moms were shown in the northeast States (District of Columbia, Maryland, Massachusetts, Connecticut, and New Jersey), which were also the states with highest wages of all employed people. 
+There was regional differences regarding to the employment rate of moms as well as wages of working moms with dependent children. The midwest States (South Dakota, Iowa, Minnesota, Wisconsin, and Nebraska) and the southeast States (Arizona, New Mexico, California, and Utah) represented the extreme cases of highest and lowest rates of moms being employed. The highest wages of working moms were shown in the northeast States (District of Columbia, Maryland, Massachusetts, Connecticut, and New Jersey). 
 
 # Summary
 
-What can we learn about the moms with dependent children from a glance at the dataset of the 2013 American Community Survey? As a brief description, their ages were bell-shape distributed with a median value of 38 and interquantile range of 13; one quarter of them were single moms either never married or being divorced/separated; they possessed a wide range of education levels from lower than high school to advanced degrees. Moms at older age
+Here is a brief summary about working moms with dependent children in the United States from a glance at the dataset of the 2013 American Community Survey: 
+  --- Two out of three moms with dependent children were working moms, and the likelyhood of being a working mom slightly increased with the mom's age.
+  --- Being a working mom or not was significantly associated with the mom's marital status and education level; divorced moms and moms with advanced degrees had the highest likelyhood to be working moms. 
+  --- Moms in the midwest region had the highest likelyhood of being a working mom, while moms in the sourtheast region has the lowest likelyhood. 
+  --- The wages of working moms were associated with the mom's age, marital status, field of work, education, as well as residency. 
