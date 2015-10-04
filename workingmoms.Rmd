@@ -201,35 +201,26 @@ The wages of working moms were plotted according to factors of field of work, ma
 
 #########################
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-subCOW <- subset(wm, AGEP == 39 & COW == "Private profit" & MAR == "Married" & SCHL == "Bachelor's degree")
-ggplot(subPAOC, aes(x = PAOC, y = log10(WAGP))) + 
-  geom_boxplot(aes(fill = PAOC), alpha = 0.5) + 
-  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
-  guides(fill = FALSE)
+levels(wm$SCHL) <- c("High school or lower", "Some college", "Associate's degree", "Bachelor's degree", "Advanced degree", "Advanced degree", "Advanced degree")
+levels(wm$COW) <- c("Private profit", "Private non-profit", "Government", "Government", "Government", "Others", "Others", "Others", "Others")
+levels(wm$MAR) <- c("Married", "Others", "Others", "Others", "Never married")
+ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) + geom_boxplot(aes(fill = MAR)) + facet_wrap(~AGEG + COW)
 
-subCOW <- subset(wm, AGEP == 39 & MAR == "Married" & SCHL == "Bachelor's degree")
-ggplot(subCOW, aes(x = COW, y = log10(WAGP))) + 
-  geom_boxplot(aes(fill = COW), alpha = 0.5) + 
-  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
-  guides(fill = FALSE)
+quantile(wm$AGEP, c(0.01, 0.99))
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = MAR), geom="point", size = 3) +
+   stat_summary(fun.y=mean, aes(group=MAR, colour = MAR), geom="line")
 
-subMAR <- subset(wm, AGEP == 39 & COW == "Private profit" & SCHL == "Bachelor's degree")
-ggplot(subMAR, aes(x = MAR, y = log10(WAGP))) + 
-  geom_jitter(aes(colour = MAR), alpha = 0.5) + 
-  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
-  guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = SCHL), geom="point", size = 3) +
+   stat_summary(fun.y=mean, aes(group=SCHL, colour = SCHL), geom="line")
 
-subSCHL <- subset(wm, AGEP == 39 & COW == "Private profit" & MAR == "Married")
-ggplot(subSCHL, aes(x = SCHL, y = log10(WAGP))) + 
-  geom_jitter(aes(colour = SCHL), alpha = 0.5) + 
-  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
-  guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = COW), geom="point", size = 3) +
+   stat_summary(fun.y=mean, aes(group=COW, colour = COW), geom="line")
 
 
+```
 #########################
 
 # Working Moms across the States
