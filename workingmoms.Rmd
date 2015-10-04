@@ -172,7 +172,7 @@ The instances of working moms were divided into four age groups (16 to 33, 34 to
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 ggplot(na.omit(wm), aes(x = COW, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = COW), alpha = 0.5) + 
-  labs(x = "Field of Work", y = "Wageon Log10 Scale", title = "Wages vs Field of Work") +
+  labs(x = "Field of Work", y = "Wage on Log10 Scale", title = "Wages vs Field of Work") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
@@ -180,7 +180,7 @@ ggplot(na.omit(wm), aes(x = COW, y = log10(WAGP))) +
 
 ggplot(na.omit(wm), aes(x = MAR, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = MAR), alpha = 0.5) + 
-  labs(x = "Marital Status", y = "Wageon Log10 Scale", title = "Wages vs Marital Status") +
+  labs(x = "Marital Status", y = "Wage on Log10 Scale", title = "Wages vs Marital Status") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
@@ -188,7 +188,7 @@ ggplot(na.omit(wm), aes(x = MAR, y = log10(WAGP))) +
 
 ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = SCHL), alpha = 0.5) + 
-  labs(x = "Education", y = "Wageon Log10 Scale", title = "Wages vs Education") +
+  labs(x = "Education", y = "Wage on Log10 Scale", title = "Wages vs Education") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
@@ -198,6 +198,39 @@ ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) +
 ### Observation
 
 The wages of working moms were plotted according to factors of field of work, marital status and education respectively, with the mean wage of each age groups labeled as points of various colors. In addition to the higher employment rate, moms with advanced degrees were more likely to have higer wages compared to moms with lower education levels. Besides, moms working for federal government showed the highest mean wages among all categories of field of work. Still, the group of moms ages 16 to 33 represented the lowest mean wages among the four age groups. 
+
+#########################
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+subCOW <- subset(wm, AGEP == 39 & COW == "Private profit" & MAR == "Married" & SCHL == "Bachelor's degree")
+ggplot(subPAOC, aes(x = PAOC, y = log10(WAGP))) + 
+  geom_boxplot(aes(fill = PAOC), alpha = 0.5) + 
+  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+
+subCOW <- subset(wm, AGEP == 39 & MAR == "Married" & SCHL == "Bachelor's degree")
+ggplot(subCOW, aes(x = COW, y = log10(WAGP))) + 
+  geom_boxplot(aes(fill = COW), alpha = 0.5) + 
+  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+
+subMAR <- subset(wm, AGEP == 39 & COW == "Private profit" & SCHL == "Bachelor's degree")
+ggplot(subMAR, aes(x = MAR, y = log10(WAGP))) + 
+  geom_jitter(aes(colour = MAR), alpha = 0.5) + 
+  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+
+subSCHL <- subset(wm, AGEP == 39 & COW == "Private profit" & MAR == "Married")
+ggplot(subSCHL, aes(x = SCHL, y = log10(WAGP))) + 
+  geom_jitter(aes(colour = SCHL), alpha = 0.5) + 
+  labs(x = "Presence of Children", y = "Wage on Log10 Scale") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+
+
+#########################
 
 # Working Moms across the States
 
@@ -210,7 +243,7 @@ all_states <- map_data("state")
 all_states$freq <- data$Freq[match(all_states$region, data$state)]*100
 ggplot(all_states, aes(x=long, y=lat, group = group)) + 
   geom_polygon(aes(fill = freq),colour="gray") + 
-  ggtitle("Percentage of Working Moms across the States")
+  ggtitle("Percentage of Moms being Employed")
 
 head(arrange(data, -Freq), 5) # The States with the highest employment rate of moms
 tail(arrange(data, -Freq), 5) # The States with the lowest employment rate of moms
@@ -223,7 +256,7 @@ all_states <- map_data("state")
 all_states$wage <- data$wage[match(all_states$region, data$state)]
 ggplot(all_states, aes(x=long, y=lat, group = group)) + 
   geom_polygon(aes(fill = wage),colour="gray") + 
-  ggtitle("Wage of Working Moms across the States")
+  ggtitle("Wage of Working Moms")
 
 head(arrange(data, -wage), 5) # The States with the highest wage of working moms
 tail(arrange(data, -wage), 5) # The States with the lowest wage of workign moms
