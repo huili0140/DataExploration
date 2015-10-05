@@ -90,8 +90,18 @@ ggplot(data, aes(x = Var1, y = Freq, group = Var2)) +
   labs(x = "Education", y = "Frequency", title = "Education vs Employment Status") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
-### Wages of the Working Mom
+### Field of the Moms's Work
 wm <- subset(am, ESR == "Employed" & WAGP > 1000)
+data <- as.data.frame(prop.table(table(wm$AGEP, wm$COW)))
+data$margin <- prop.table(table(wm$AGEP))
+data$height <- data$Freq/data$margin
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(wm$AGEP))) -1]) + data$margin/2
+ggplot(data, aes(center, height)) + 
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
+  labs(x = "Age", y = "Frequency", title = "Field of the Moms' Work") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
+
+### Wages of the Working Mom
 wm$AGEG <- cut(wm$AGEP, breaks = quantile(wm$AGEP))
 ggplot(na.omit(wm), aes(x = AGEG, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = AGEG), alpha = 0.5) + 
@@ -99,27 +109,42 @@ ggplot(na.omit(wm), aes(x = AGEG, y = log10(WAGP))) +
 
 ggplot(na.omit(wm), aes(x = COW, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = COW), alpha = 0.5) + 
-  labs(x = "Field of Work", y = "Wageon Log10 Scale", title = "Wages vs Field of Work") +
+  labs(x = "Field of Work", y = "Wage on Log10 Scale", title = "Wage vs Field of Work") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
   guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = COW), geom="point", size = 3) +
+  stat_summary(fun.y=mean, aes(group=COW, colour = COW), geom="line") + 
+  labs(x="Age", y="Wage on Log10 Scale", title="Wage vs Age, Grouped by Field of Work") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
 ggplot(na.omit(wm), aes(x = MAR, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = MAR), alpha = 0.5) + 
-  labs(x = "Marital Status", y = "Wageon Log10 Scale", title = "Wages vs Marital Status") +
+  labs(x = "Marital Status", y = "Wage on Log10 Scale", title = "Wage vs Marital Status") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
   guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = MAR), geom="point", size = 3) +
+  stat_summary(fun.y=mean, aes(group=MAR, colour = MAR), geom="line") + 
+  labs(x="Age", y="Wage on Log10 Scale", title="Wage vs Age, Grouped by Marital Status") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
 ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) + 
   geom_boxplot(aes(fill = SCHL), alpha = 0.5) + 
-  labs(x = "Education", y = "Wageon Log10 Scale", title = "Wages vs Education") +
+  labs(x = "Education", y = "Wage on Log10 Scale", title = "Wage vs Education") +
   stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
   stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
   theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
   guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = SCHL), geom="point", size = 3) +
+  stat_summary(fun.y=mean, aes(group=SCHL, colour = SCHL), geom="line") + 
+  labs(x="Age", y="Wage on Log10 Scale", title="Wage vs Age, Grouped by Education") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
 # Working Moms across the States
 data <- as.data.frame(prop.table(table(am$ST, am$ESRG), margin = 1))
