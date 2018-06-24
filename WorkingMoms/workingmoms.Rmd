@@ -1,0 +1,300 @@
+---
+title: "The Working Moms"
+output:
+  html_document:
+    theme: cerulean
+---
+_________________________________________________________________________________________________
+
+# Introduction
+
+The 2013 American Community Survey run by the US Census Bureau provides a rich dataset with detailed information of approximately 3.5 million households regarding to topics such as ancestry, education, employment, and residency. Being a working mom myself, I'm particularly interested in a descriptive analysis of the employment status of the American moms with dependent children younger than 18 years old.
+
+### Dataset
+
+The variables including information of region, age, marital status, presence of kids, employment status, education, and wage were read into R and saved as pus.Rdata. Male at any age and female younger than 16 years old were removed from the dataset by omitting the instances with NA in the PAOC (presence of own children) variable.  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#library(data.table)
+#cols <- c("PAOC", "ST", "AGEP", "MAR", "ESR", "COW", "SCHL", "WAGP")
+#pusa <- fread("ss13pusa.csv", select = cols)
+#pusb <- fread("ss13pusb.csv", select = cols)
+#pus <- subset(rbind(pusa, pusb), !is.na(PAOC))
+#save(pus, file = "pus.Rdata")
+```
+
+The catagorical variables were labled according to ACS data dictionary. The am dataset contained three groups of moms including moms with little kids ("children under 6"), moms with big kids ("children 6 to 17"), and moms with little kids and big kids ("children under 6 and 6 to 17") according to the information of presence of children (PAOC). 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(maps)
+load("pus.Rdata")
+
+pus$MAR <- factor(pus$MAR)
+levels(pus$MAR) <- c("Married", "Widowed", "Divorced", "Separated", "Never married")
+
+pus$ESR <- factor(pus$ESR)
+levels(pus$ESR) <- c("Employed", "Employed, not at work", "Unemployed", "Employed", "Employed, not at work", "Not in labor force")
+pus$ESRG <- ifelse(pus$ESR == "Employed", 1, 0)
+
+pus$COW <- factor(pus$COW)
+levels(pus$COW) <- c("Private profit", "Private non-profit", "Local government", "State government", "Federal government", "Self-employed", "Self-employed", "Working without pay", "Unemployed")
+
+pus$PAOC <- factor(pus$PAOC)
+levels(pus$PAOC) <- c("Children under 6", "Children 6 to 17", "Children under 6 and 6 to 17", "No children")
+pus$PAOCG <- ifelse(pus$PAOC == "No children", 0, 1)
+
+pus$SCHL <- ifelse(pus$SCHL <= 16, 16, pus$SCHL)
+pus$SCHL <- ifelse(pus$SCHL >= 17 & pus$SCHL <= 19, 19, pus$SCHL)
+pus$SCHL <- factor(pus$SCHL)
+levels(pus$SCHL) <- c("High school or lower", "Some college", "Associate's degree", "Bachelor's degree", "Master's degree", "Professional degree", "Doctorate degree")
+
+am <- subset(pus, PAOCG == 1)
+```
+
+# Overview of the American Moms
+
+### Age
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(pus, aes(AGEP, group = PAOC)) + 
+  geom_bar(binwidth = 1, aes(colour = PAOC, fill = PAOC), alpha = 0.3) +
+  xlab("Age") + 
+  ylab("Count") + 
+  ggtitle("Women by Age")
+
+prop.table(table(pus$PAOC))
+by(pus$AGEP, pus$PAOCG, summary)
+```
+
+### Observation
+
+Being a mom with dependent children is a transient stage in a women's life. Roughly a quarter of the women older than 16 were with dependent children, and only 5.8% of them were with little kids younger than 6 years old. The age distribution of the moms was bell-shaped with a median value of 38 and interquantile range of 13. The median ages of moms with little kids, moms with big kids, and moms with both were 30, 43, and 34  respectively. 
+
+
+### Marital Status
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$AGEP, am$MAR)))
+data$margin <- prop.table(table(am$AGEP))
+data$height <- data$Freq/data$margin
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
+ggplot(data, aes(center, height)) + 
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
+  labs(x = "Age", y = "Frequency", title = "Marital Status of the Moms") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
+```
+
+### Observation
+
+Roughly three quarters of the moms with dependent children were married, and the percentage of being married remained relatively constant among the moms in their 30s or 40s. The single moms at younger age were more likely to be never married, while the single moms at older age were more likely to be divorced or separated.
+
+
+### Education Level
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$AGEP, am$SCHL)))
+data$margin <- prop.table(table(am$AGEP))
+data$height <- data$Freq/data$margin
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
+ggplot(data, aes(center, height)) + 
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
+  labs(x = "Age", y = "Frequency", title = "Education Level of the Moms") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
+```
+
+### Observation
+
+Approximately one third of the moms with dependent children possessed a Bachelor's degree or higher. The moms in their 30s or 40s showed higher education level compared to the moms at their young age, eg., 17% of the moms at age 45 had a Master's degree or higher in comparison to 2% of the moms at age 25. 
+
+
+# The Working Moms
+
+### Employment Status
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$AGEP, am$ESR)))
+data$margin <- prop.table(table(am$AGEP))
+data$height <- data$Freq/data$margin
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(am$AGEP))) -1]) + data$margin/2
+ggplot(data, aes(center, height)) + 
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
+  labs(x = "Age", y = "Frequency", title = "Employment Status of the Moms") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
+```
+
+### Observation
+
+While it's largely a personal choice to be a working mom or not, there might be objective factors that influence the mom's decision. A rough look at the plot of employmennt status showed that overall 65% of the moms were employed and active at work. The proportion of employment steadily increased with the moms' age among moms younger than 50 years old, suggesting that more moms continued their career track when their kids grew older. Meanwhile, the proportion of being unemployed dropped accordingly with the moms' age. 
+
+
+### Marital Status vs Employment Status
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+chisq.test(table(am$MAR, am$ESR))
+data <- as.data.frame(prop.table(table(am$MAR, am$ESR), margin = 1))
+ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
+  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
+  labs(x = "Marital Status", y = "Frequency", title = "Marital Status vs Employment Status")
+```
+
+### Observation
+
+The Chi square test suggested a highly significant association between marital status and employment status among the moms with dependent children. The highest percentage of being employed were seen in the groups of divorced (77%) and separated (68%) moms, who were most likely to be facing the double pressure of taking care of children and being financially independent. 
+
+
+### Education vs Employment Status
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+chisq.test(table(am$SCHL, am$ESR))
+data <- as.data.frame(prop.table(table(am$SCHL, am$ESR), margin = 1))
+ggplot(data, aes(x = Var1, y = Freq, group = Var2)) + 
+  geom_bar(stat = "identity", aes(colour = Var2, fill = Var2), alpha = 0.3) + 
+  labs(x = "Education", y = "Frequency", title = "Education vs Employment Status") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+### Observation
+
+The Chi square test also revealed a significant association between education and employment status among the moms. Approximately 80% of the moms with advanced degrees (Master's degree or higher) were employed and active at work, while the percentage of employment was only about 53% among the moms with high school education or lower. 
+
+
+### Field of the Moms's Work
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+wm <- subset(am, ESR == "Employed" & WAGP > 1000)
+data <- as.data.frame(prop.table(table(wm$AGEP, wm$COW)))
+data$margin <- prop.table(table(wm$AGEP))
+data$height <- data$Freq/data$margin
+data$center <- c(0, cumsum(data$margin)[1:length(levels(factor(wm$AGEP))) -1]) + data$margin/2
+ggplot(data, aes(center, height)) + 
+  geom_bar(stat = "identity", aes(width = margin, fill = Var2), col = "gray", alpha = 0.7) +
+  labs(x = "Age", y = "Frequency", title = "Field of the Moms' Work") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), labels=c("16", "27", "31", "33", "36", "38", "41", "43", "46", "50", "93"))
+```
+
+### Observation
+
+Roughly two-thirds of the moms worked for private profit organizations, while the others worked for private non-profits, governments or was self-employed. The proportions of moms working for the latter categories steadily increased along with the moms's age. 
+
+
+### Wages of the Working Mom
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+wm$AGEG <- cut(wm$AGEP, breaks = quantile(wm$AGEP))
+ggplot(na.omit(wm), aes(x = AGEG, y = log10(WAGP))) + 
+  geom_boxplot(aes(fill = AGEG), alpha = 0.5) + 
+  labs(x = "Age Group", y = "Wage on Log10 Scale", title = "Wages vs Age Groups")
+```
+
+### Observation
+
+The instances of working moms were divided into four age groups (16 to 33, 34 to 39, 40 to 45, and 46 to 93) according to their age quantiles. When the wages were plotted according to age groups, a significant increment was shown between the first and the second groups. The wages of working moms in the second, third and fourth age groups remained relatively on the same level.  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(na.omit(wm), aes(x = COW, y = log10(WAGP))) + 
+  geom_boxplot(aes(fill = COW), alpha = 0.5) + 
+  labs(x = "Field of Work", y = "Wage on Log10 Scale", title = "Wage vs Field of Work") +
+  stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
+  stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = COW), geom="point", size = 3) +
+  stat_summary(fun.y=mean, aes(group=COW, colour = COW), geom="line") + 
+  labs(x="Age", y="Wage on Log10 Scale", title="Wage vs Age, Grouped by Field of Work") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+### Observation
+
+The wages of working moms were plotted according to their field of work, with the mean wage of each age group labeled as points of various colors. Moms working for federal government showed the highest mean wages among all categories of field of work. Still, the group of moms ages 16 to 33 represented the lowest mean wages among the four age groups. 
+
+The mean wage of individual field of work was further plotted according to age to illustrate whether age could a confounder between wage and field of work. Although the highest mean wage was consistently shown in the group of moms working for federal government, the wage differences between the moms being self-employed and the moms working for state/local government or private organizations became insignificant when the moms' ages were older than mid-40. Given the fact that the proportion of moms being self-employed increased along with age, age is likely to be a confounder between the working moms' wages and fields of work. 
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(na.omit(wm), aes(x = MAR, y = log10(WAGP))) + 
+  geom_boxplot(aes(fill = MAR), alpha = 0.5) + 
+  labs(x = "Marital Status", y = "Wage on Log10 Scale", title = "Wage vs Marital Status") +
+  stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
+  stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = MAR), geom="point", size = 3) +
+  stat_summary(fun.y=mean, aes(group=MAR, colour = MAR), geom="line") + 
+  labs(x="Age", y="Wage on Log10 Scale", title="Wage vs Age, Grouped by Marital Status") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+### Observation
+
+The highest mean wage was shown in the group of married moms, followed by the group of divorced moms. Considering the association between marital status and age, could age be a confounder here between the working moms' wages and marital status? The answer is probably yes. The wage difference between married moms and divorced moms was no longer seen when the moms' ages were older than mid-40. 
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(na.omit(wm), aes(x = SCHL, y = log10(WAGP))) + 
+  geom_boxplot(aes(fill = SCHL), alpha = 0.5) + 
+  labs(x = "Education", y = "Wage on Log10 Scale", title = "Wage vs Education") +
+  stat_summary(fun.y=mean, aes(colour = AGEG), geom="point", size = 5) +
+  stat_summary(fun.y=mean, aes(group=AGEG, colour = AGEG), geom="line") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) + 
+  guides(fill = FALSE)
+ggplot(subset(wm, AGEP <= 56 & AGEP >= 21), aes(x = factor(AGEP), y = log10(WAGP))) + 
+  stat_summary(fun.y=mean, aes(colour = SCHL), geom="point", size = 3) +
+  stat_summary(fun.y=mean, aes(group=SCHL, colour = SCHL), geom="line") + 
+  labs(x="Age", y="Wage on Log10 Scale", title="Wage vs Age, Grouped by Education") + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+### Observation
+
+In addition to the higher employment rate, moms with advanced degrees were more likely to have higer wages compared to moms with lower education levels. Although the association between wage and education was blurred among the moms in their 20s, wage was consistently stratified according to education among the moms older than 30 years old. Thus, Age is also likely to be a confounder between the working moms' wages and education. 
+
+
+# Working Moms across the States
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+data <- as.data.frame(prop.table(table(am$ST, am$ESRG), margin = 1))
+data <- subset(data, Var2 == 1)
+data$state <- c('alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','district of columbia','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming')
+
+all_states <- map_data("state")
+all_states$freq <- data$Freq[match(all_states$region, data$state)]*100
+ggplot(all_states, aes(x=long, y=lat, group = group)) + 
+  geom_polygon(aes(fill = freq),colour="gray") + 
+  ggtitle("Percentage of Moms being Employed")
+
+head(arrange(data, -Freq), 5) # The States with the highest employment rate of moms
+tail(arrange(data, -Freq), 5) # The States with the lowest employment rate of moms
+
+wm_grouped <- group_by(wm, ST)
+data <- summarise(wm_grouped, wage = mean(WAGP))
+data$state <- c('alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','district of columbia','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming')
+
+all_states <- map_data("state")
+all_states$wage <- data$wage[match(all_states$region, data$state)]
+ggplot(all_states, aes(x=long, y=lat, group = group)) + 
+  geom_polygon(aes(fill = wage),colour="gray") + 
+  ggtitle("Wage of Working Moms")
+
+head(arrange(data, -wage), 5) # The States with the highest wage of working moms
+tail(arrange(data, -wage), 5) # The States with the lowest wage of workign moms
+```
+
+### Observation
+
+There was regional differences regarding to the percentage of moms being employed as well as their wages. The midwest States (South Dakota, Iowa, Minnesota, Wisconsin, and Nebraska) and the southeast States (Arizona, New Mexico, California, and Utah) represented the extreme cases of highest and lowest rates of moms being employed. The highest wages of working moms were shown in the northeast States (District of Columbia, Maryland, Massachusetts, Connecticut, and New Jersey). 
+
+
+# Summary
+
+Here is a brief summary about working moms with dependent children in the United States from a glance at the dataset of the 2013 American Community Survey: 
+  --- Two out of three moms with dependent children were working moms, and the likelyhood of being a working mom slightly increased with the mom's age.
+  --- Being a working mom or not was significantly associated with the mom's marital status and education level; divorced moms and moms with advanced degrees had the highest likelyhood to be working moms. 
+  --- Moms in the midwest region had the highest likelyhood of being a working mom, while moms in the sourtheast region has the lowest likelyhood. 
+  --- The wages of working moms were associated with the mom's age, marital status, field of work, education, as well as residency. 

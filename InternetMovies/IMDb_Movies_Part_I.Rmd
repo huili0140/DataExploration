@@ -1,0 +1,682 @@
+---
+title: 'IMDB Movies Part I: Data Exploration'
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+# Data
+
+The dataset contains information about movies, including ratings, budget, gross revenue and other attributes. It contains a dataframe with the same name that has 40K rows and 39 columns. Each row represents a movie title and each column represents a descriptor such as `Title`, `Actors`, and `Budget`. The dataset is created by querying IMDb’s API (see [www.omdbapi.com](http://www.omdbapi.com/)) and joining it with separate information of movie budgets and gross earnings. The join key was the movie title. This data is available for personal use, but IMDb’s terms of service do not allow it to be used for commercial purposes or for creating a competing repository.
+
+# Objective
+
+The goal is to investigate the relationship between the movie descriptors and the box office success of movies, as represented by the variable `Gross`. This task is extremely important as it can help a studio decide which titles to fund for production, how much to bid on produced movies, when to release a title, how much to invest in marketing and PR, etc. This information is most useful before a title is released, but it is still very valuable after the movie is already released to the public (for example it can affect additional marketing spend or how much a studio should negotiate with on-demand streaming companies for “second window” streaming rights).
+
+# Setup
+
+## Load data
+
+```{r echo=TRUE}
+load('movies_merged')
+cat("Dataset has", dim(movies_merged)[1], "rows and", dim(movies_merged)[2], "columns", end="\n", file="")
+df = movies_merged
+cat("Column names:", end="\n", file="")
+colnames(df)
+```
+
+## Load R packages
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(reshape2)
+library(gridExtra)
+```
+
+# Tasks
+
+## 1. Remove non-movie rows
+
+The variable `Type` captures whether the row is a movie, a TV series, or a game. There are 40,000 rows of movie records left after removing non-movie rows. 
+
+```{r}
+# TODO: Remove all rows from df that do not correspond to movies
+df <- df[df$Type == "movie",]
+dim(df)
+```
+
+## 2. Process `Runtime` column
+
+The variable `Runtime` represents the length of the title as a string. It is converted to a numeric value (in minutes) and replace `df$Runtime` with the new numeric column.
+
+```{r}
+# TODO: Replace df$Runtime with a numeric column containing the runtime in minutes
+numRuntime <- function(runtime) {
+  ifelse( runtime == "N/A", NA, 
+          ifelse(strsplit(runtime, " ")[[1]][2] == "min", 
+                 as.numeric(strsplit(runtime, " ")[[1]][1]), 
+                 as.numeric(strsplit(runtime, " ")[[1]][1])*60 + as.numeric(strsplit(runtime, " ")[[1]][3])))
+}
+df$Runtime <- sapply(df$Runtime, numRuntime)
+```
+
+The distribution and changes of `Runtime` are evaluated over years (variable `Year`, which you can bucket into decades) and in relation to the budget (variable `Budget`).The summary of runtime is shown as below. The data is ranged from minimum of 1 to maximum of 873 with median of 90 and mean of 81.79. 
+
+```{r}
+## distribution of Runtime value
+summary(na.omit(df[, c("Title", "Runtime")]))
+```
+
+The distribution of runtime is plotted in the histogram as below. Two peaks are observed around ~10 min and ~100 min respectively. The data is highly right skewed with a long tail at the high end. 
+
+```{r}
+## distribution of Runtime value
+ggplot(na.omit(df[, c("Title", "Runtime")]), aes(Runtime)) + 
+  geom_histogram(bins = 200, fill = "steelblue") + 
+  ggtitle("Distribution of Runtime")
+```
+The runtime is plotted according to decades in the boxplot shown below. 
+
+```{r}
+# TODO: Investigate how Runtime varies by Year bucketed into decades
+df$Decade <- as.factor(df$Year %/% 10 * 10)
+ggplot(na.omit(df[, c("Decade", "Runtime")]), aes(Decade, Runtime)) + 
+  geom_boxplot(aes(fill = Decade)) + scale_y_sqrt() + 
+  ggtitle("Runtime vs. Decades")
+```
+
+The runtime is plotted according to budget in log10 scale in the scatterplot shown below. The trend of the data is indicated with a smooth line using the method of loess.  
+
+```{r}
+# TODO: Investigate how Runtime varies by Budget
+ggplot(na.omit(df[, c("Budget", "Runtime")]), aes(Budget, Runtime)) + 
+  geom_point(aes(color = Budget)) +
+  scale_x_log10() + 
+  geom_smooth(method = "loess") + 
+  xlab("Budget in Log10 Scale") +
+  ggtitle("Runtime vs. Budget")
+```
+
+The data is divided into fractions according to the range of budget. The runtime is plotted according to the budget fractions in the boxplot shown below. 
+
+```{r}
+# TODO: Investigate how Runtime varies by Budget (Budget is divided into 8 fractions)
+df$BudgetFraction <- cut(df$Budget, breaks = 10)
+ggplot(na.omit(df[, c("BudgetFraction", "Runtime")]), aes(BudgetFraction, Runtime)) +   
+  geom_boxplot(aes(fill = BudgetFraction)) +
+  ggtitle("Runtime vs. Budget Fractions")
+
+```
+
+**Observation**: There are 39,241 runtimes available in the 40,000 movie records. The runtime is highly skewed with a long tail at the high end. The range of runtime is from 1 min to 873 min; the median of runtime is 90 min; and the mean of runtime is 81.79 min. 
+
+Runtime is plotted according to decades in the boxplot shown above. The most significant increase in runtime with decades is found before 1920s. The greatest interquartile range of runtime is found in the decades from 1910s to 1940s with relatively limited data points and large variation. The runtime continues to increase slowly with decades after 1920s. 
+
+Runtime is plotted according to budget and budget fractions in the plots shown above. Seen from the scatter plot of runtime vs. budget, there is a weak positive correlation between the two features. The boxplot of runtime vs. budget fractions further confirms the median value of runtime continuously increases with the value of budgets. 
+
+
+## 3. Encode `Genre` column
+
+The column `Genre` represents a list of genres associated with the movie in a string format. The text String is parsed into binary vector with 1s representing the presence of a genre and 0s the absence, and added  to the dataframe as additional columns.For example, if there are a total of 3 genres: Drama, Comedy, and Action, a movie that is both Action and Comedy should be represented by a binary vector <0, 1, 1>. The Genre names are first compiled into a vector of all possible genres.
+
+```{r}
+# TODO: Replace Genre with a collection of binary columns
+genreList <- unique(unlist(strsplit(df$Genre, ", ")))
+genreList <- genreList[genreList != "N/A"]
+
+genreDummy <- function(genre, genreString) {
+  as.numeric(genre %in% strsplit(genreString, ", ")[[1]])
+}
+
+genreDf <- data.frame(matrix(0, nrow(df), length(genreList)))
+names(genreDf) <- genreList
+
+for (genre in genreList) {
+  genreDf[genre] <- mapply(genreDummy, genre, df$Genre) ## multiple arguments
+}
+
+df <- cbind(df, genreDf)
+dim(df)
+```
+
+The relative proportions of movies are plotted for the top 10 most common genres. The percentage of each genre in the whold dataset (40,000) is plotted as below. 
+
+```{r}
+# TODO: Select movies from top 10 most common genres and plot their relative proportions
+genreDfTop10 <- genreDf[, order(-colSums(genreDf))[1:10]]
+genreDfTop10Sum <- data.frame(Count = colSums(genreDfTop10), 
+                              Genre = names(genreDfTop10))
+genreListTop10 <- arrange(genreDfTop10Sum, -Count)$Genre
+genreDfTop10Sum <- within(genreDfTop10Sum, 
+                   Genre <- factor(Genre, levels=genreListTop10))
+genreDfTop10Sum$Percentage <- genreDfTop10Sum$Count *100/40000
+ggplot(genreDfTop10Sum, aes(Genre, Percentage)) + 
+  geom_bar(stat = "identity", aes(fill = Genre)) + 
+  ylab("Percentage") + 
+  ggtitle("Percentage of the Top 10 Most Common Genres in the Whole Dataset")
+```
+
+The relative proportions of movies are plotted for the top 10 most common genres. The percentage of each genre in the sum count of the top 10 most common genres is plotted as below. 
+
+```{r}
+genreDfTop10Sum$relativePercentage <- genreDfTop10Sum$Count * 100 / sum(genreDfTop10Sum$Count)
+ggplot(genreDfTop10Sum, aes(Genre, relativePercentage)) + 
+  geom_bar(stat = "identity", aes(fill = Genre)) + 
+  ylab("Percentage") + 
+  ggtitle("Relative Percentage of the Top 10 Most Common Genres")
+```
+
+The distribution of `Runtime` changes across genres are examined for the top 10 most common genres. The distributin of runtime is shown in the following histograms for the top 10 most common genres. 
+
+```{r}
+# TODO: Plot Runtime distribution for top 10 most common genres
+runtimeGenre <- data.frame(Runtime = NA, Title = NA, Genre = NA)
+for (g in genreListTop10) {
+  data <- df[df[, g] == 1, c("Runtime", "Title")]
+  data$Genre <- g
+  runtimeGenre <- rbind(runtimeGenre, data)
+}
+
+ggplot(na.omit(runtimeGenre), aes(Runtime)) + 
+  geom_histogram(bins = 20, aes(fill = Genre)) + 
+  facet_wrap(~ Genre, nrow = 3, scales = "free") + 
+  ggtitle("Runtime Distribution for Top 10 Most Common Genres")
+```
+
+The distribution of runtime (in log10 scale) is shown with the following boxplot for the top 10 most common genres. 
+
+```{r}
+## Boxplot of runtime in top 10 most common genres
+ggplot(na.omit(runtimeGenre), aes(Genre, Runtime)) + 
+  geom_boxplot(aes(fill = Genre)) + 
+  scale_y_log10() + ylab("Runtime in Log10 Scale") +
+  ggtitle("Runtime Distribution for Top 10 Most Common Genres")
+```
+The table is to investigate overlap between the genres of Animation and Short. 
+
+```{r}
+table(df$Animation, df$Short)
+```
+
+**Observation**: The top 10 most common genres are identified as Drama, Comedy, Short, Romance, Action, Crime, Thriller, Documentary, Adventure, and Animation. The largest range of runtime is observed in the Genres of Documentary, Drama, and Romance with maximum value greater than 600 min. The smallest median of runtime is observed in Animation, Short, and Documentary. The runtime shows a bell-shaped distribution in the Genres of Action, Adventure, Crime, Drama, Romance, and Thriller. In contrast, the runtime distribution of Animation and Comedy shows double peaks. 
+
+It is not surprising that the Short Genre, as the name indicates, is one of the genres with shortest runtime. Meanwhile, seen from the table above, more than 2/3 of the Animation Genre are also categorized as Short. The large overlap between Animation and Short explains why the Animation Genre is also showing the shortest runtime among all genres. 
+
+## 4. Eliminate mismatched rows
+
+The dataframe was put together by merging two different sources of data and it is possible that the merging process was inaccurate in some cases (the merge was done based on movie title, but there are cases of different movies with the same title). There are 3 columns that contain date information: `Year` (numeric year), `Date` (numeric year), and `Released` (string representation of the release date).The rows suspected as a merge error are removed based on a mismatch between these variables. 
+
+```{r}
+## Row numbers with and without Gross value present:
+table(is.na(df$Gross))
+
+# TODO: Remove rows with Year/Date/Released mismatch
+getYear <- function(date) {
+  ifelse(is.na(date), NA, strsplit(as.character(date), "-")[[1]][1])
+}
+df$YearReleased <- sapply(df$Released, getYear)
+
+index <- ifelse(is.na(df$Year) | is.na(df$Date) | is.na(df$YearReleased), FALSE, 
+                ifelse(abs(as.numeric(df$Year)-as.numeric(df$Date)) > 1 | abs(as.numeric(df$Year)-as.numeric(df$YearReleased)) > 1 | abs(as.numeric(df$YearReleased)-as.numeric(df$Date)) > 1, FALSE, TRUE) )
+
+table(index)
+df <- df[index, ]
+```
+
+**Observation**: There are 4,558 records with valid Gross value present. First, I tried to remove all rows with mismatch Year, Date, and Year of Release. However, it resulted in losing more than 10% of the total data with valid Gross. So I removed all rows with more than one year difference in pairwise comparison of Year, Date, and Year of Release. It resulted in losing less than 10% of the total data with 4349 records left with valid gross. 
+
+## 5. Explore `Gross` revenue
+
+Gross revenue is the key feature for the commercial success of a movie. Gross revenue is related to Budget, Runtime or Genre in any way. The gross revenue (in log10 scale) is plotted according to the top 10 most common genres in the boxplot shown below. 
+
+```{r message=FALSE, warning=FALSE}
+grossGenre <- data.frame(Budget = NA, Runtime = NA, Gross = NA, Genre = NA)
+for (g in genreListTop10) {
+  data <- df[df[, g] == 1, c("Budget", "Runtime", "Gross")]
+  data$Genre <- g
+  grossGenre <- rbind(grossGenre, data)
+}
+
+# TODO: Investigate if Gross Revenue is related to genre
+ggplot(grossGenre, aes(Genre, Gross)) + geom_boxplot(aes(fill = Genre)) + 
+  scale_y_log10() + ylab("Gross in Log10 Scale") +
+  ggtitle("Gross vs. Top 10 Most Common Genre")
+```
+
+The gross revenue is grouped according to the top 10 most common genres and plotted according to budget. A trend line is added with the method of loess to show the correlation between gross and budget. 
+
+```{r message=FALSE, warning=FALSE}
+# TODO: Investigate if Gross Revenue is related to Budget
+ggplot(na.omit(grossGenre), aes(Budget, Gross)) + 
+  geom_point(aes(color = Genre)) + 
+  facet_wrap(~ Genre, nrow = 3, scales = "free") + 
+  geom_smooth(method = "loess") + ggtitle("Gross vs. Budget, grouped by Genre")
+```
+
+The gross revenue is grouped according to the top 10 most common genres and plotted according to runtime. A trend line is added with the method of loess to show the correlation between gross and runtime.  
+
+```{r message=FALSE, warning=FALSE}
+# TODO: Investigate if Gross Revenue is related to Runtime
+ggplot(na.omit(grossGenre), aes(Runtime, Gross)) + 
+  geom_point(aes(color = Genre)) + 
+  facet_wrap(~ Genre, nrow = 3, scales = "free") + 
+  geom_smooth(method = "loess") + ggtitle("Gross vs. Runtime, grouped by Genre")
+```
+
+The pairwise correlation between gross, budget, and runtime is shown in the ggpairs plot below. The data are grouped according to the top 10 most common genres. 
+
+```{r message=FALSE, warning=FALSE}
+# TODO: Investigate if Gross Revenue is related to Runtime
+ggpairs(na.omit(grossGenre), 
+    columns=c("Gross", "Budget", "Runtime"), 
+    title = "Pairwise Correlation of Gross, Budget, and Runtime", 
+    mapping = aes(color = Genre))
+```
+
+**Observation**: Boxplot is used to show statistics of Gross in the top 10 most common genres. The lowest gross is observed in the genre of Documentary, while the top 3 highest gross are observed in the genres of Animation, Adventure, and Action. Scatterplot is used to show relationship between gross and budget in each individual top 10 most common genres. Strong positive correlation between gross and budget (overal correlation coefficient 0.742) is observed in all the genres. Scatterplot is also used to show weak positive correlation (overall correlaiton coefficient 0.253) between gross and runtime. It is noticable that the correlation tends to become negative when the runtime is at the very high end. Meanwhile, exceptions are observed in the genre of Short and Docomentary due to the great variation and limited data points. 
+
+
+The gross revenue is plotted according to the Month of Release in the following boxplot. 
+
+```{r echo=TRUE, warning=FALSE, message = FALSE}
+# TODO: Investigate if Gross Revenue is related to Release Month
+getMonth <- function(date) {
+  ifelse(is.na(date), NA, strsplit(as.character(date), "-")[[1]][2])
+}
+df$MonthReleased <- as.factor(sapply(df$Released, getMonth))
+ggplot(na.omit(df[, c("Gross", "MonthReleased")]), aes(MonthReleased, Gross)) + 
+  geom_boxplot(aes(fill = MonthReleased)) + scale_y_log10() + ylab("Gross in Log10 Scale") +
+  ggtitle("Gross vs. Release Month")
+
+```
+
+**Observation**: Gross is related to Release Month as shown in the above boxplot. The highest gross values are found in the summer months (June, July) and the end of the year (December). It is reasonable since people tend to have more free time to go to movie theatre in the summer break and during the holidays. 
+
+
+## 6. Process `Awards` column
+
+The variable `Awards` describes nominations and awards in text format. It is converted to 2 numeric columns, the first capturing the number of wins, and the second capturing nominations. The `Awards` column is replace the `Awards` column with these new columns, and then the relationship of between Gross Revenue and Awards is analyzed. 
+
+```{r echo=TRUE}
+# TODO: Convert Awards to 2 numeric columns: wins and nominations
+getWin <- function(string) {
+  ## get the number before wins and the number after won
+  ##(\\d+) any number before the " win" substring, the thing in () is saved in \2
+  win1 <- gsub(".*(^|\\s)(\\d+)\\swin.*", "\\2", string, perl=TRUE)
+  win2 <- gsub("^Won\\s(\\d+).*", "\\1", string, perl=TRUE)
+  if (win1 != string & win2 != string) return (as.numeric(win1) + as.numeric(win2))
+  else if (win1 != string ) return (as.numeric(win1))
+  else return (NA)
+}
+df$Win <- sapply(df$Awards, getWin)
+
+getNomi <- function(string) {
+  ## get the number before nomination and the number after Nominated for
+  ##(\\d+) any number before the " nomination" substring, the thing in () is saved in \2
+  win1 <- gsub(".*(^|\\s)(\\d+)\\snomination.*", "\\2", string, perl=TRUE)
+  win2 <- gsub("^Nominated\\sfor\\s(\\d+).*", "\\1", string, perl=TRUE)
+  if (win1 != string & win2 != string) return (as.numeric(win1) + as.numeric(win2))
+  else if (win1 != string ) return (as.numeric(win1))
+  else return (NA)
+}
+df$Nomination <- sapply(df$Awards, getNomi)
+
+print("Table of NA Win")
+table(is.na(df$Win))
+
+print("Table of NA Nomination")
+table(is.na(df$Nomination))
+```
+
+**Observation**: The function of gsub and general expression are used to extract the win and nominaiton numbers from the string of Awards. The general expressions are listed as below:
+
+number before "win": ".*(^|\\s)(\\d+)\\swin.*"
+number after "Won": "^Won\\s(\\d+).*"
+number before "nomination": ".*(^|\\s)(\\d+)\\snomination.*"
+number after "Nominated for":  "^Nominated\\sfor\\s(\\d+).*"
+
+The numbers, if successfully extracted with the general expressions, are added up as the total number of wins or nominations for that row of record. In summary, 2771 rows have valid non-zero wins and 3497 rows have valid non-zero nominations. 
+
+The gross revenue is plotted according to the number of winning awards, both in log10 scale. A trendline is added to show the correlation between gross and win with the method of loess. 
+
+```{r echo=TRUE, warning = FALSE, message = FALSE}
+## Plot Gross value against wins
+ggplot(df, aes(Win, Gross)) + geom_point(aes(color = Win)) + 
+  scale_x_log10() + scale_y_log10() + 
+  geom_smooth(method = "loess") +
+  ggtitle("Gross vs. Wins, Both in Log Scale")
+```
+
+The gross revenue is plotted according to the number of nominations, both in log10 scale. A trendline is added to show the correlation between gross and nominaiton with the method of loess.
+
+```{r echo=TRUE, warning = FALSE, message = FALSE}
+## Plot Gross value against nominations
+ggplot(df, aes(Nomination, Gross)) + geom_point(aes(color = Nomination)) + 
+  scale_x_log10() + scale_y_log10() + 
+  geom_smooth(method = "loess") +
+  ggtitle("Gross vs. Nominations, Both in Log Scale")
+```
+
+**Observation**: The gross revenue is plotted against win and nomination on log transformation scales. A weak positive correlation is observed between gross revenue and total numbers of win/nomination. However, it is noticable that the gross revenue shows a great variation according to numbers of winning awards and nominations, especially when the winning awards and nominations are not at the high end. In summary, the winning awards and nominations are not likely to be good indicator of the gross revenue in general; but a good gross revenue is almost guaranteed with a large number of winning awards and nominations. 
+
+## 7. Movie ratings from IMDb and Rotten Tomatoes
+
+There are several variables that describe ratings, including IMDb ratings (`imdbRating` represents average user ratings and `imdbVotes` represents the number of user ratings), and multiple Rotten Tomatoes ratings (represented by several variables pre-fixed by `tomato`). The pairwise relationships between these different descriptors are evaluated below using graphs. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Illustrate how ratings from IMDb and Rotten Tomatoes are related
+ggpairs(df, 
+  columns=c("imdbRating", "imdbVotes"), 
+  title = "Pairwise Comparison of IMDB Rating Descriptors")
+```
+
+The pairwise relationships of tomatoMeter, tomatoRating, tomatoReviews, tomatoUserMeter, tomatoUserRating, and tomatUserReviews are shown as below. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Illustrate how ratings from IMDb and Rotten Tomatoes are related
+ggpairs(df, 
+  columns=c("tomatoMeter", "tomatoRating", "tomatoReviews", "tomatoUserMeter", "tomatoUserRating", "tomatoUserReviews"), 
+  title = "Pairwise Comparison of Tomato Rating Descriptors")
+```
+
+The pairwise comparison of the votes/numbers of ratings in IMDB and Rotton Tomato is shown as below. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Illustrate how ratings from IMDb and Rotten Tomatoes are related
+ggpairs(df, 
+  columns=c("imdbVotes", "tomatoReviews", "tomatoUserReviews"), 
+  title = "Pairwise Comparison of IMDB Numbers and Tomato Numbers")
+```
+
+The pairwise relationship between the ratings from IMDB and Rotten Tomato is shown as below. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Illustrate how ratings from IMDb and Rotten Tomatoes are related
+ggpairs(df, 
+  columns=c("imdbRating", "tomatoMeter", "tomatoRating", "tomatoUserMeter", "tomatoUserRating"), 
+  title = "Pairwise Comparison of IMDB Ratings and Tomato Ratings")
+```
+
+The dataset is divided into four groups according to the range of imdbRating. The tomatoRating is plotted according to imdbRating in each individual group. A trend line is added to indicate the relationship between imdbRating and tomatoRating with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Illustrate how ratings from IMDb and Rotten Tomatoes are related
+df$imdbRatingFraction <- cut(df$imdbRating, breaks = 4)
+ggplot(na.omit(df[, c("imdbRating", "imdbRatingFraction", "tomatoRating")]), aes(imdbRating, tomatoRating)) + 
+  ggtitle("Comparison of IMDB Ratings and Tomato Ratings") +
+  geom_smooth(aes(color = imdbRatingFraction), method = "loess") + 
+  geom_point(aes(color= imdbRatingFraction)) + 
+  facet_wrap(~ imdbRatingFraction, nrow = 2, scales = "free")
+```
+
+The dataset is divided into four groups according to the range of imdbRating. The tomatoUserRating is plotted according to imdbRating in each individual group. A trend line is added to indicate the relationship between imdbRating and tomatoUserRating with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Illustrate how ratings from IMDb and Rotten Tomatoes are related
+ggplot(na.omit(df[, c("imdbRating", "imdbRatingFraction", "tomatoUserRating")]), aes(imdbRating, tomatoUserRating)) + 
+  ggtitle("Comparison of IMDB Ratings and Tomato User Ratings") +
+  geom_smooth(aes(color = imdbRatingFraction), method = "loess") + 
+  geom_point(aes(color= imdbRatingFraction)) + 
+  facet_wrap(~ imdbRatingFraction, nrow = 2, scales = "free")
+```
+
+**Observation**: As shown in the ggpairs plot above, the number of ratings in IMDB (imdbVotes) is positively correlated to the number of ratings in Tomato (tomatoReviews) with a correlation coefficient of 0.502. Meanwhile, the number of ratings in IMDB (imdbvotes) is weakly correlated to the number of user ratings in Tomato (tomatoUserReviews) with a correlation coefficient of 0.251. 
+
+It is also shown that the user rating of IMDB (imdbRating) is strongly correlated to the critics ratings of Rotten Tomato with the following correlation coefficients: 0.768 to tomatoMeter, 0.813 to tomatoRating, 0.832 to tomatoUserMeter, and 0.803 to tomatoUserRating. To identify the differences between the two rating systems, the dataset is divided into four fractions based on the user rating of IMDB (imdbRatingFraction). The positive correlation between IMDB ratings and Tomato ratings is observed in three out of four of the fractions as shown in the scatterplot above. No correlation is found in the first fraction in which the IMDB rating is below 3.53. The ratings of IMDB and Rotten Tomato differ significantly in the poorly rated movies. 
+
+
+## 8. Ratings and awards
+
+These ratings typically reflect the general appeal of the movie to the public or gather opinions from a larger body of critics. Whereas awards are given by professional societies that may evaluate a movie on specific attributes, such as artistic performance, screenplay, sound design, etc.
+
+The relationship between ratings and awards are evaluated using graphs (awards here refers to wins and/or nominations). Pairwise comparison between ratings and awards is shown in the ggpairs plot below. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+ggpairs(df, 
+  columns=c("Win", "Nomination", "imdbRating", "tomatoRating", "tomatoUserRating"), 
+  title = "Correlation between Ratings and Awards")
+```
+
+The dataset is divided into four groups based on the range of imdbRating. The number of wins is plotted according to imdbRating in each individual group. A trend line is added to indicate the relationship between imdbRating and wins with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+df$imdbRatingFraction <- cut(df$imdbRating, breaks = 4)
+ggplot(na.omit(df[, c("Win", "imdbRating", "imdbRatingFraction")]), aes(imdbRating, Win)) + 
+  ggtitle("Win vs. imdbRating") +
+  geom_smooth(aes(color = imdbRatingFraction), method = "loess") + scale_y_log10() +
+  geom_point(aes(color= imdbRatingFraction)) + 
+  facet_wrap(~ imdbRatingFraction, nrow = 2, scales = "free")
+```
+
+The dataset is divided into four groups based on the range of imdbRating. The number of nominations is plotted according to imdbRating in each individual group. A trend line is added to indicate the relationship between imdbRating and nominations with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+ggplot(na.omit(df[, c("Nomination", "imdbRating", "imdbRatingFraction")]), aes(imdbRating, Nomination)) + 
+  ggtitle("Nomination vs. imdbRating") +
+  geom_smooth(aes(color = imdbRatingFraction), method = "loess") + scale_y_log10() +
+  geom_point(aes(color= imdbRatingFraction)) + 
+  facet_wrap(~ imdbRatingFraction, nrow = 2, scales = "free")
+```
+
+The dataset is divided into four groups based on the range of tomatoRating. The number of wins is plotted according to tomatoRating in each individual group. A trend line is added to indicate the relationship between tomatoRating and wins with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+df$tomatoRatingFraction <- cut(df$tomatoRating, breaks = 4)
+ggplot(na.omit(df[, c("Win", "tomatoRating", "tomatoRatingFraction")]), aes(tomatoRating, Win)) + 
+  ggtitle("Win vs. tomatoRating") +
+  geom_smooth(aes(color = tomatoRatingFraction), method = "loess") + scale_y_log10() +
+  geom_point(aes(color= tomatoRatingFraction)) + 
+  facet_wrap(~ tomatoRatingFraction, nrow = 2, scales = "free")
+```
+
+
+The dataset is divided into four groups based on the range of tomatoRating. The number of nominations is plotted according to tomatoRating in each individual group. A trend line is added to indicate the relationship between tomatoRating and nominations with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+ggplot(na.omit(df[, c("Nomination", "tomatoRating", "tomatoRatingFraction")]), aes(tomatoRating, Nomination)) + 
+  ggtitle("Nomination vs. tomatoRating") +
+  geom_smooth(aes(color = tomatoRatingFraction), method = "loess") + scale_y_log10() +
+  geom_point(aes(color= tomatoRatingFraction)) + 
+  facet_wrap(~ tomatoRatingFraction, nrow = 2, scales = "free")
+```
+
+
+The dataset is divided into four groups based on the range of tomatoUserRating. The number of wins is plotted according to tomatoUserRating in each individual group. A trend line is added to indicate the relationship between tomatoUserRating and wins with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+df$tomatoUserRatingFraction <- cut(df$tomatoUserRating, breaks = 4)
+ggplot(na.omit(df[, c("Win", "tomatoUserRating", "tomatoUserRatingFraction")]), aes(tomatoUserRating, Win)) + 
+  ggtitle("Win vs. tomatoUserRating") +
+  geom_smooth(aes(color = tomatoUserRatingFraction), method = "loess") + scale_y_log10() +
+  geom_point(aes(color= tomatoUserRatingFraction)) + 
+  facet_wrap(~ tomatoUserRatingFraction, nrow = 2, scales = "free")
+```
+
+The dataset is divided into four groups based on the range of tomatoUserRating. The number of nominations is plotted according to tomatoUserRating in each individual group. A trend line is added to indicate the relationship between tomatoUserRating and nominations with the method of loess. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# TODO: Show how ratings and awards are related
+ggplot(na.omit(df[, c("Nomination", "tomatoUserRating", "tomatoUserRatingFraction")]), aes(tomatoUserRating, Nomination)) + 
+  ggtitle("Nomination vs. tomatoUserRating") +
+  geom_smooth(aes(color = tomatoUserRatingFraction), method = "loess") + scale_y_log10() +
+  geom_point(aes(color= tomatoUserRatingFraction)) + 
+  facet_wrap(~ tomatoUserRatingFraction, nrow = 2, scales = "free")
+```
+
+**Observation**: Seen from the ggpairs plot, there is a weak positive correlation between awards and ratings. The correlation coefficients are as listed below: 0.385 between wins and imdbRating, 0.451 between wins and tomatoRating, 0.365 between wins and tomatoUserRating, 0.398 between nominations and imdbRating, 0.466 between nominations and tomatoRating, and 0.399 between nominations and tomatoUserRating. 
+
+The correlation between awards and ratings is highly dependable on the range of the ratings. When the ratings are divided into four fractions based on the rating range, no correlation is observed between awards and ratings in the first and second fractions with the low ratings. The correlation is also not observed in the last fractions for the data points with the extremely high ratings. 
+
+Based on the above observation, there is no strong correlation between awards and ratings. The ratings are not good indicators in predicting the success of a movie in winning awards or nominations, especially in the cases that the ratings are too high or too low.  
+
+## 9. Expected insights
+
+**Insignt 1**: Many movies contain material that are not appropriate for children. The Rated column with film ratings is cleaned up according to the category of MPAA film ratings (G, PG, PG13, R, NC-17, https://en.wikipedia.org/wiki/Motion_Picture_Association_of_America_film_rating_system), and the top 10 most common genres of each MPAA film ratings category are explored. It is expected that these MPAA categories are associated with different genres. For example, genres such as Animation and Family are associated with the rating of G, while genres such as Thriller and Crime are associated with the rating of R and NC-17. 
+
+```{r echo=TRUE}
+## clean up the column of Rated
+unique(df$Rated)
+df$Rated <- ifelse(df$Rated == "N/A" | df$Rated == "NOT RATED" | df$Rated == "UNRATED", NA, df$Rated)
+df$Rated <- ifelse(df$Rated == "APPROVED" | df$Rated == "PASSED" | df$Rated == "TV-G", "G", df$Rated)
+df$Rated <- ifelse(df$Rated == "TV-14", "PG-13", df$Rated)
+df$Rated <- ifelse(df$Rated == "TV-PG" | df$Rated == "GP" | df$Rated == "M", "PG", df$Rated)
+df$Rated <- ifelse(df$Rated == "X", "NC-17", df$Rated)
+df$Rated <- factor(df$Rated, levels = c("G", "PG", "PG-13", "R", "NC-17"))
+unique(df$Rated)
+```
+```{r echo=TRUE}
+## Count the most common genres for each category
+df1 <- na.omit(df[, c("Rated", genreList)])
+
+catList <- c("G", "PG", "PG-13", "R", "NC-17")
+result <- matrix(0, length(genreList), length(catList))
+
+for (i in (1:5)) {
+  data <- subset(df1, Rated == catList[i])
+  result[, i] <- as.vector(colSums(data[, -1]))
+}
+
+resultDf <- data.frame(result)
+names(resultDf) <- c("G", "PG", "PG13", "R", "NC17")
+resultDf$Genre <- genreList
+
+## plot the top 10 most common genres for each category
+temp <- arrange(resultDf, -G)[1:10, ]
+temp$Genre <- factor(temp$Genre, levels=temp$Genre)
+ggplot(temp, aes(Genre, G)) + 
+  geom_bar(stat="identity", aes(fill=Genre)) + 
+  ggtitle("Top 10 Most Common Genres in MPAA Rating G")
+```
+
+```{r echo=TRUE}
+## plot the top 10 most common genres for each category
+temp <- arrange(resultDf, -PG)[1:10, ]
+temp$Genre <- factor(temp$Genre, levels=temp$Genre)
+ggplot(temp, aes(Genre, PG)) + 
+  geom_bar(stat="identity", aes(fill=Genre)) + 
+  ggtitle("Top 10 Most Common Genres in MPAA Rating PG")
+
+```
+
+```{r echo=TRUE}
+## plot the top 10 most common genres for each category
+temp <- arrange(resultDf, -PG13)[1:10, ]
+temp$Genre <- factor(temp$Genre, levels=temp$Genre)
+ggplot(temp, aes(Genre, PG13)) + 
+  geom_bar(stat="identity", aes(fill=Genre)) + 
+  ggtitle("Top 10 Most Common Genres in MPAA Rating PG-13")
+
+```
+```{r echo=TRUE}
+## plot the top 10 most common genres for each category
+temp <- arrange(resultDf, -R)[1:10, ]
+temp$Genre <- factor(temp$Genre, levels=temp$Genre)
+ggplot(temp, aes(Genre, R)) + 
+  geom_bar(stat="identity", aes(fill=Genre)) + 
+  ggtitle("Top 10 Most Common Genres in MPAA Rating R")
+```
+```{r echo=TRUE}
+## plot the top 10 most common genres for each category
+temp <- arrange(resultDf, -NC17)[1:10, ]
+temp$Genre <- factor(temp$Genre, levels=temp$Genre)
+ggplot(temp, aes(Genre, NC17)) + 
+  geom_bar(stat="identity", aes(fill=Genre)) + 
+  ggtitle("Top 10 Most Common Genres in MPAA Rating NC-17")
+```
+
+**Observation**: The genres of Drama and Comedy are very popular in all the MPAA rating categories. It is reasonable considering the dominance of these two genres in the dataset and the fact that a movie can belong to multiple genres. On the other hand, the MPAA categoreis are associated with different genres. As expected, the genres of Adventure, Animation, and Family are kid friendly and good for general audience; these genres are among the most common genres in MPAA rating G. The genres of Crime, Thriller, Action, and Horror are rather limited to adult audience; these genres are among the most common genres in MPAA rating R and NC-17.  
+
+**Insignt 2**: The relationship between Gross and Domestic_Gross is explored. It is expected that gross revenue is closely associated with domestic gross revenue. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+## plot the Gross vs. Domestic_Gross
+ggplot(df, aes(Domestic_Gross, Gross)) + 
+  geom_point(color="steelblue") + scale_x_log10() + scale_y_log10() +
+  geom_smooth(color = "gold") + 
+  ggtitle("Gross vs. Domestic Gross")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+## plot the Gross vs. Domestic_Gross, grouped by country (USA only or not USA)
+df$CountryUSA <- ifelse(df$Country == "USA", "USA Only", 
+                        ifelse(grepl("USA", df$Country, fixed = T), "USA and Other Countries", "Other Countries"))
+df$CountryUSA <- factor(df$CountryUSA, levels = c("USA Only", "USA and Other Countries", "Other Countries"))
+ggplot(df, aes(Domestic_Gross, Gross)) + 
+  geom_point(aes(color=CountryUSA)) + scale_x_log10() + scale_y_log10() +
+  geom_smooth(aes(color = CountryUSA)) +
+  facet_wrap(~CountryUSA, nrow = 1) +
+  ggtitle("Gross vs. Domestic Gross, grouped by Country")
+
+```
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+## plot the Gross vs. Domestic_Gross, grouped by country (USA only or not USA)
+df2 <- subset(df, Gross != 0 & Domestic_Gross != 0)
+ggplot(df2, aes(CountryUSA, Gross/Domestic_Gross)) + 
+  geom_boxplot(aes(fill=CountryUSA)) + scale_y_log10() +
+  xlab("Country Produced") + ylab("Ratio of Gross over Domestic Gross") + 
+  ggtitle("Ration of Gross over Domestic Gross")
+
+```
+
+**Observation**: Seen from the first scatterplot, it is true that there is a strong positive correlation between gross revenue and domestic gross revenue. The dataset is further divided into three groups based on the country the movie is produced: USA only, USA and other countries, and countries other than USA. When gross is plotted with domestic gross in individual groups, it is observed that the gross is closely associated with domestic gross in the "USA Only"" group, while the gross significantly exceeds the domestic gross in the "Other Countries" group. It indicates that a major part of the gross of the latter group comes from countries other than USA, presumably from the countries that the movies are produced. The boxplot of ratio of Gross over Domestic_Gorss also shows that the median of such ratio increases across the groups of "USA Only", "USA and Other Countries", and "Other Countries". 
+
+
+## 10. Unexpected insight
+
+I'd like to know whether the awards would favor any category of MPAA ratings. So I explored the distribution of wins and nominations according to MPAA ratings. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+df3 <- df[, c("Rated", "Win", "Nomination")]
+rated <- na.omit(df3) %>% group_by(Rated) %>% 
+  summarise(totalWin = sum(Win), totalNomination = sum(Nomination), count = n())
+
+ggplot(rated, aes(factor(1), count, fill=Rated)) +
+  geom_bar(stat = "identity") + 
+  coord_polar(theta = "y") + xlab("") + ylab("") + 
+  ggtitle("Distribution by MPAA Ratings")
+
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(rated, aes(factor(1), totalWin, fill=Rated)) +
+  geom_bar(stat = "identity") + 
+  coord_polar(theta = "y") + xlab("") + ylab("") + 
+  ggtitle("Distribution of Winning Awards by MPAA Ratings")
+
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(rated, aes(factor(1), totalNomination, fill=Rated)) +
+  geom_bar(stat = "identity") + 
+  coord_polar(theta = "y") + xlab("") + ylab("") + 
+  ggtitle("Distribution of Nominations by MPAA Ratings")
+
+```
+
+I further explored the MPAA rating distributions in the top 100 movies winning the highest numbers of awards and nominations in total. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+df3 <- na.omit(df3)
+df3$Awards <- df3$Win + df3$Nomination
+df3 <- arrange(df3, -Awards)[1:100, ]
+rated <- df3 %>% group_by(Rated) %>% 
+  summarise(totalAwards = sum(Awards), count = n())
+
+ggplot(rated, aes(factor(1), count, fill=Rated)) +
+  geom_bar(stat = "identity") + 
+  coord_polar(theta = "y") + xlab("") + ylab("") + 
+  ggtitle("Distribution by MPAA Ratings")
+
+```
+
+**Observation**: It looks like the category of MPAA rating R, although less than 50% of the overall movies, takes more than 50% of the winning awards and nominations in the pie plots. It is further confirmed that the category of MPAA rating R is over-represented in the top 100 most awarded movies, while the categories of MPAA ratings G and PG are under-represented in the top 100 most awarded movies. So, it appears there is a bias related to MPAA ratings in granting awards. 
+

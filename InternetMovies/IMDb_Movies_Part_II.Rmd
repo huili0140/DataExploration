@@ -1,0 +1,667 @@
+---
+title: 'IMDB Movies Part II: Regression'
+output:
+  html_document:
+    code_folding: none
+    theme: default
+  html_notebook:
+    code_folding: none
+    theme: default
+  pdf_document: default
+---
+
+# Setup
+
+## Load Data
+
+Same as Part I, the data is loaded into memory:
+
+```{r}
+load('movies_merged')
+cat("Dataset has", dim(movies_merged)[1], "rows and", dim(movies_merged)[2], 
+    "columns", end="\n", file="")
+df = movies_merged
+colnames(df)
+```
+
+## Load R packages
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, echo=TRUE}
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(reshape2)
+library(gridExtra)
+```
+
+# Data Preprocessing
+
+The dataset is cleaned up in preparation of building models to predict Gross Revenue. 
+
+## 1. Remove non-movie rows
+
+```{r}
+# TODO: Remove all rows from df that do not correspond to movies
+df <- df[df$Type == "movie",]
+cat("Dataset has", dim(movies_merged)[1], "rows and", dim(movies_merged)[2], 
+    "columns", end="\n", file="")
+```
+
+## 2. Drop rows with missing `Gross` value
+
+Since the goal is to model `Gross` revenue against other variables, rows that have missing `Gross` values are removed.
+
+```{r}
+# TODO: Remove rows with missing Gross value
+df <- subset(df, !is.na(Gross))
+```
+
+## 3. Exclude movies released prior to 2000
+
+Inflation and other global financial factors may affect the revenue earned by movies during certain periods of time. Taking that into account, all movies that were released prior to the year 2000 are removed. 
+
+```{r}
+# TODO: Exclude movies released prior to 2000
+df <- subset(df, Year >= 2000 & Date >= 2000)
+```
+
+## 4. Eliminate mismatched rows
+
+There are 3 columns that contain date information: `Year` (numeric year), `Date` (numeric year), and `Released` (string representation of the release date).The rows suspected as a merge error are removed based on a mismatch between these variables.
+
+```{r}
+# TODO: Remove mismatched rows
+getYear <- function(date) {
+  ifelse(is.na(date), NA, strsplit(as.character(date), "-")[[1]][1])
+}
+df$YearReleased <- as.numeric(sapply(df$Released, getYear))
+index <- ifelse(is.na(df$Year) | is.na(df$Date) | is.na(df$YearReleased), FALSE, 
+                ifelse(abs(as.numeric(df$Year)-as.numeric(df$Date)) > 1 | abs(as.numeric(df$Year)-as.numeric(df$YearReleased)) > 1 | abs(as.numeric(df$YearReleased)-as.numeric(df$Date)) > 1, FALSE, TRUE) )
+
+table(index)
+df <-subset(df, select = -c(Released))
+df <- df[index, ]
+```
+
+## 5. Drop `Domestic_Gross` column
+
+`Domestic_Gross` is basically the amount of revenue a movie earned within the US. Understandably, it is very highly correlated with `Gross` and is in fact equal to it for movies that were not released globally. Hence, it is removed for modeling purposes.
+
+```{r}
+# TODO: Exclude the `Domestic_Gross` column
+df <- subset(df, select=-c(Domestic_Gross))
+```
+
+## 6. Process `Runtime` column
+
+```{r}
+# TODO: Replace df$Runtime with a numeric column containing the runtime in minutes
+numRuntime <- function(runtime) {
+  ifelse( runtime == "N/A", NA, 
+          ifelse(strsplit(runtime, " ")[[1]][2] == "min", 
+                 as.numeric(strsplit(runtime, " ")[[1]][1]), 
+                 as.numeric(strsplit(runtime, " ")[[1]][1])*60 + as.numeric(strsplit(runtime, " ")[[1]][3])))
+}
+df$Runtime <- sapply(df$Runtime, numRuntime)
+```
+
+## 7. Duplicate informations
+
+```{r}
+# TODO(optional): Additional preprocessing
+# Remove columns of IDs and websites
+df <- subset(df, select = -c(imdbID, Poster, tomatoURL, Website))
+
+# Remove columns with identical values
+df <- subset(df, select = -c(Type, Response, BoxOffice))
+```
+
+The columns of Year, Date, YearReleased and DVD are highly correlated to each other with Pearson correlation coefficients greater than 0.9. Three of them (Date, YearReleased, DVD) are removed from the data frame. 
+
+```{r}
+# Remove columns with highly correlated values (r >= 0.9): Year, Date, YearReleased, YearDVD
+df$YearDVD <- as.numeric(sapply(df$DVD, getYear))
+cor(as.matrix(na.omit(df[, c("Year", "Date", "YearReleased", "YearDVD")])), method = "pearson")
+df <- subset(df, select = -c(Date, YearReleased, DVD, YearDVD))
+```
+
+The columns of tomatoMeter and tomatoRating are highly correlated to the column of Metascore, and the column of tomatoUserRating is highly correlated to the column of tomatoUserMeter. The columns of tomatoMeter, tomatoRating, and tomatoUserRating are removed from the data frame.  
+
+```{r, warning=FALSE}
+# Remove columns with highly correlated values (r >= 0.9)
+df$Metascore <- as.numeric(df$Metascore)
+df_rating <- subset(df, select = c(Metascore, imdbRating, tomatoMeter, tomatoRating, 
+                                   tomatoReviews, tomatoUserMeter, tomatoUserRating))
+cor(as.matrix(na.omit(df_rating)), method = "pearson")
+df <- subset(df, select = -c(tomatoMeter, tomatoRating, tomatoUserRating))
+```
+
+
+The columns of Runtime, imdbRating, imdbVotes, tomatoUserMeter, and tomatoUserReviews contain missing data that are less than 5% of the total data set; the rows with missing data are simply removed from the data frame. The columns of Metascore, tomatoReviews, tomatoFresh, and tomatoRotten contain missing data that are about 10% of hte total data set; the median values of the columns are used to fill in the missing data. 
+
+```{r}
+# Delete or replace missing data in numeric variables
+df <- subset(df, !is.na(Runtime) & !is.na(imdbRating) & !is.na(imdbVotes) & 
+               !is.na(tomatoUserMeter) & !is.na(tomatoUserReviews))
+df$Metascore[is.na(df$Metascore)] <- median(df$Metascore, na.rm=TRUE)
+df$tomatoReviews[is.na(df$tomatoReviews)] <- median(df$tomatoReviews, na.rm=TRUE)
+df$tomatoFresh[is.na(df$tomatoFresh)] <- median(df$tomatoFresh, na.rm=TRUE)
+df$tomatoRotten[is.na(df$tomatoRotten)] <- median(df$tomatoRotten, na.rm=TRUE)
+
+```
+
+## Final preprocessed dataset
+
+```{r}
+# TODO: Print the dimensions of the final preprocessed dataset and column names
+cat("Dataset has", dim(movies_merged)[1], "rows and", dim(movies_merged)[2], 
+    "columns", end="\n", file="")
+colnames(df)
+```
+
+# Evaluation Strategy
+
+Each of the tasks in the next section describes building a regression model. In order to compare their performance, 20% of hte preprocessed dataset are kept aside as the **test set**. The remainder of the preprocessed dataset is used as the **training data**. The training and test Root Mean Squared Error (RMSE) are explored at different training set sizes.
+
+```{r}
+# Create Training and Test data
+set.seed(72)  
+index <- sample(1:nrow(df), 0.8*nrow(df)) 
+df_training <- df[index, ]  
+df_testing  <- df[-index, ]
+```
+
+The evaluation procedure is as below:
+
+- A suitable sequence of training set sizes varying from 10% to 100% is chosen. For each size, the model is trained on sampling that many inputs from the training data. 
+- The resulting training and test RMSE are reported based on at least 10 times at each training set size.
+- A graph is generated showing the averaged train and test RMSE values as a function of the train set size (%), with optional error bars.
+
+
+```{r}
+# Helper function to create a subset of traing data
+training_subset <- function(df_training, n) { # n from 1 to 10 indicating 10% to 100%
+  df_training[sample(1:nrow(df_training), n*nrow(df_training)/10), ]
+}
+
+# Helper function to calculate RMSE
+rmse_subset <- function(data, model) {
+  pred <- predict(model, data)
+  sqrt(mean((data$Gross - pred)*(data$Gross - pred)))
+}
+```
+
+# Tasks
+
+## 1. Numeric variables
+
+Linear Regression is used to predict `Gross` based on available _numeric_ variables.
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+# TODO: Build & evaluate model 1 (numeric variables only)
+model <- lm(Gross ~ Year + Runtime + Metascore + imdbRating + imdbVotes + 
+                  tomatoReviews + tomatoFresh + tomatoRotten + tomatoUserMeter +
+                  tomatoUserReviews + Budget, data = df_training) ## model
+summary(model)
+
+# stepwise regression using the library MASS
+library(MASS)
+model.step <- stepAIC(model, direction = 'both')
+summary(model.step) # Summary of the best model
+```
+
+```{r}
+# ANOVA of the stepwise regression
+model.step$anova # ANOVA of the result 
+```
+
+```{r}
+# train the model with 10 data sizes, 10 times each
+result <- matrix(0, ncol = 4, nrow = 20)
+for (i in (1:10)) {
+  rmse_train <- c()
+  rmse_test <- c()
+  for (j in (1:10)) {
+    training <- training_subset(df_training, i)
+    model <- lm(Gross ~ Year + Runtime + imdbRating + imdbVotes + tomatoRotten + 
+    tomatoUserMeter + tomatoUserReviews + Budget, data = training) ## model
+    rmse_train <- c(rmse_train, rmse_subset(training, model))
+    rmse_test <- c(rmse_test, rmse_subset(df_testing, model))
+  }
+  result[(2*i - 1), ] <- c(i*10, "train", mean(rmse_train), sd(rmse_train))
+  result[2*i, ] <- c(i*10, "test", mean(rmse_test), sd(rmse_test))
+}
+
+# transform the result of rmse to data frame
+result <- data.frame(result, stringsAsFactors = FALSE)
+names(result) <- c("percent", "type", "mean", "sd")
+result$percent <- as.numeric(as.character(result$percent))
+result$mean <- as.numeric(as.character(result$mean))
+result$sd <- as.numeric(as.character(result$sd))
+tail(result, 2)
+
+# plot the result of rmse
+ggplot(result, aes(percent, mean)) +
+  geom_point(aes(color = type)) +
+  geom_line(aes(color = type)) +
+  geom_errorbar(aes(ymin=mean - sd, ymax=mean+sd, color = type), width=.1) +
+  theme_bw() +
+  xlab("Training Size (Percent)") + ylab("RMSE") +
+  ggtitle("RMSE vs. Training Data Size")
+```
+
+**Observation**: The model uses numeric variables of Year + Runtime + imdbRating + imdbVotes + tomatoRotten + tomatoUserMeter + tomatoUserReviews + Budget. The best mean test RMSE observed is around $8.32 * 10^7$ at the 100% training set size. 
+
+## 2. Feature transformations
+
+Feature transformation of the numeric varaibles is added to improve the prediction quality from **Task 1** as much as possible. Both numeric transformations such as power transforms and non-numeric transformations of the numeric variables like binning are explored. 
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+# TODO: Build & evaluate model 2 (transformed numeric variables only)
+# log transformaiton of runtime, Budget, imdbVotes, tomatoUserReviews
+# bin transformation of runtime, Budget, imdbVotes, tomatoUserReviews
+df$Runtime_bin <- as.numeric(cut(df$Runtime, breaks = 100))
+df$Runtime_log <- log(df$Runtime + 1)
+df$Budget_bin <- as.numeric(cut(df$Budget, breaks = 100))
+df$Budget_log <- log(df$Budget + 1) 
+df$imdbVotes_bin <- as.numeric(cut(df$imdbVotes, breaks = 100))
+df$imdbVotes_log <- log(df$imdbVotes + 1) 
+df$tomatoUserReviews_bin <- as.numeric(cut(df$tomatoUserReviews, breaks = 100))
+df$tomatoUserReviews_log <- log(df$tomatoUserReviews + 1)
+
+# Create Training and Test data
+set.seed(72)  
+index <- sample(1:nrow(df), 0.8*nrow(df)) 
+df_training <- df[index, ]  
+df_testing  <- df[-index, ]
+
+# regression by adding featue transformation variables
+model <- lm(Gross ~ Year + Runtime + imdbRating + imdbVotes + tomatoRotten + tomatoUserMeter +
+              tomatoUserReviews + Budget + Runtime_bin + Runtime_log + Budget_bin + Budget_log + 
+              imdbVotes_bin + imdbVotes_log + tomatoUserReviews_bin + tomatoUserReviews_log, 
+            data = df_training) ## model
+summary(model)
+
+# stepwise regression using the library MASS
+model.step <- stepAIC(model, direction = 'both')
+summary(model.step) # Summary of the best model
+```
+
+```{r}
+# ANOVA of the stepwise regression
+model.step$anova # ANOVA of the result 
+```
+
+```{r}
+# train the model with 10 data sizes, 10 times each
+result <- matrix(0, ncol = 4, nrow = 20)
+for (i in (1:10)) {
+  rmse_train <- c()
+  rmse_test <- c()
+  for (j in (1:10)) {
+    training <- training_subset(df_training, i)
+    model <- lm(Gross ~ Year + imdbRating + imdbVotes + tomatoRotten + tomatoUserMeter + 
+                  tomatoUserReviews + Budget + Runtime_log + Budget_bin + Budget_log + 
+                  imdbVotes_log + tomatoUserReviews_log, 
+                data = training) ## final model
+    rmse_train <- c(rmse_train, rmse_subset(training, model))
+    rmse_test <- c(rmse_test, rmse_subset(df_testing, model))
+  }
+  result[(2*i - 1), ] <- c(i*10, "train", mean(rmse_train), sd(rmse_train))
+  result[2*i, ] <- c(i*10, "test", mean(rmse_test), sd(rmse_test))
+}
+
+# transform the result of rmse to data frame
+result <- data.frame(result, stringsAsFactors = FALSE)
+names(result) <- c("percent", "type", "mean", "sd")
+result$percent <- as.numeric(as.character(result$percent))
+result$mean <- as.numeric(as.character(result$mean))
+result$sd <- as.numeric(as.character(result$sd))
+tail(result, 2)
+
+# plot the result of rmse
+ggplot(result, aes(percent, mean)) +
+  geom_point(aes(color = type)) +
+  geom_line(aes(color = type)) +
+  geom_errorbar(aes(ymin=mean - sd, ymax=mean+sd, color = type), width=.1) +
+  theme_bw() +
+  xlab("Training Size (Percent)") + ylab("RMSE") +
+  ggtitle("RMSE vs. Training Data Size")
+```
+
+**Observation**: Log transformation and binning transformation are done with the variables of Runtime, Budget, imdbVotes, and tomatoUserReviews. The log transformation is efficient in transforming highly right-skewed distribution such as imdbVotes and tomatoUserReviews, while binning transformation is efficient in grouping the data into ordinal variables such as Budget_bin. The transformed variables of Runtime_log + Budget_bin + Budget_log + imdbVotes_log + tomatoUserReviews_log are kept in the final model after AIC comparison.  
+
+The RMSE of training data get decreased from $9.84 * 10^7$ to $9.74 * 10^7$ with the 100% training data size compared to Task 1. The RMSE of testing data get decreased from $8.32 * 10^7$ to $8.31 * 10^7$ with the 100% training data size compared to Task 1. 
+
+
+## 3. Non-numeric variables
+
+The variables of genre, actors, directors, and other categorical variables are converted to columns that can be used for regression (e.g. binary columns). The model is built with categorial variables only.
+
+```{r}
+# TODO: Build & evaluate model 3 (converted non-numeric variables only)
+# Convert Genre, Rated, Language, Country, tomatoImage, Director, Actors
+
+# helper function to create binary variables
+getDummy <- function(element, elementString) {
+  as.numeric(element %in% strsplit(elementString, ", ")[[1]])
+  }
+
+getDummyDf <- function(variable) {
+  dummyList <- unlist(strsplit(variable, ", ")) # get the pool of all elements
+  dummyList <- dummyList[dummyList != "N/A"]
+  if (length(unique(dummyList)) > 10) {# get the top 10 elements
+    dummyList <- names(sort(summary(as.factor(dummyList)), decreasing=T)[2:11])
+  } else {# get the unique elements
+    dummyList <- unique(dummyList)
+  }
+  df <- data.frame(matrix(0, length(variable), length(dummyList)))
+  names(df) <- dummyList
+  for (element in dummyList) {
+    df[element] <- mapply(getDummy, element, variable)
+  }
+  return(df)
+}
+
+# clean up the variable of Rated
+df$Rated <- ifelse(df$Rated == "N/A" | df$Rated == "NOT RATED" | df$Rated == "UNRATED" | is.na(df$Rated), "N/A", df$Rated)
+df$Rated <- ifelse(df$Rated == "APPROVED" | df$Rated == "PASSED" | df$Rated == "TV-G", "G", df$Rated)
+df$Rated <- ifelse(df$Rated == "TV-14", "PG-13", df$Rated)
+df$Rated <- ifelse(df$Rated == "TV-PG" | df$Rated == "GP" | df$Rated == "M", "PG", df$Rated)
+df$Rated <- ifelse(df$Rated == "X", "NC-17", df$Rated)
+
+# Convert Genre, Rated, Language, Country, tomatoImage, Director, Actors to dummy variables
+genreDf <- getDummyDf(df$Genre)
+ratedDf <- getDummyDf(df$Rated)
+languageDf <- getDummyDf(df$Language)
+countryDf <- getDummyDf(df$Country)
+tomatoImageDf <- getDummyDf(df$tomatoImage)
+directorDf <- getDummyDf(df$Director)
+actorDf <- getDummyDf(df$Actors)
+colnames(actorDf)[which(names(actorDf) == "George Clooney")] <- "Actor George Clooney" # Occur in both director and actor
+
+# combine the dummy variables to a dataframe
+categoricalDf <- data.frame(Gross = df$Gross)
+categoricalDf <- cbind(categoricalDf, genreDf, ratedDf, languageDf, countryDf, tomatoImageDf, directorDf, actorDf)
+names(categoricalDf) <- sub(" ", ".", names(categoricalDf))
+names(categoricalDf) <- sub("-", ".", names(categoricalDf))
+names(categoricalDf) <- sub(" ", ".", names(categoricalDf))
+dim(categoricalDf)
+```
+
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+# Create Training and Test data
+set.seed(72)  
+index <- sample(1:nrow(df), 0.8*nrow(df)) 
+df_training <- categoricalDf[index, ]  
+df_testing  <- categoricalDf[-index, ]
+
+# TODO: Build & evaluate model 1 (numeric variables only)
+model <- lm(Gross ~ ., data = df_training) ## model
+summary(model)
+
+# stepwise regression using the library MASS
+library(MASS)
+model.step <- stepAIC(model, direction = 'both')
+summary(model.step) # Summary of the best model
+```
+
+```{r}
+# ANOVA of the stepwise regression
+model.step$anova # ANOVA of the result 
+```
+
+
+```{r, warning=FALSE}
+# train the model with 10 data sizes, 10 times each
+result <- matrix(0, ncol = 4, nrow = 20)
+for (i in (1:10)) {
+  rmse_train <- c()
+  rmse_test <- c()
+  for (j in (1:10)) {
+    training <- training_subset(df_training, i)
+    model <- lm(Gross ~ Action + Adventure + Thriller + Fantasy + Sci.Fi + PG + 
+    PG.13 + G + Spanish + French + Italian + Japanese + Canada + 
+    France + Spain + rotten + fresh + certified + Ridley.Scott + 
+    Steven.Spielberg + Robert.Rodriguez + Ron.Howard + Mark.Wahlberg + 
+    Adam.Sandler + Ben.Stiller + Johnny.Depp, 
+                data = training) ## final model
+    rmse_train <- c(rmse_train, rmse_subset(training, model))
+    rmse_test <- c(rmse_test, rmse_subset(df_testing, model))
+  }
+  result[(2*i - 1), ] <- c(i*10, "train", mean(rmse_train), sd(rmse_train))
+  result[2*i, ] <- c(i*10, "test", mean(rmse_test), sd(rmse_test))
+}
+
+# transform the result of rmse to data frame
+result <- data.frame(result, stringsAsFactors = FALSE)
+names(result) <- c("percent", "type", "mean", "sd")
+result$percent <- as.numeric(as.character(result$percent))
+result$mean <- as.numeric(as.character(result$mean))
+result$sd <- as.numeric(as.character(result$sd))
+tail(result, 2)
+
+# plot the result of rmse
+ggplot(result, aes(percent, mean)) +
+  geom_point(aes(color = type)) +
+  geom_line(aes(color = type)) +
+  geom_errorbar(aes(ymin=mean - sd, ymax=mean+sd, color = type), width=.1) +
+  theme_bw() +
+  xlab("Training Size (Percent)") + ylab("RMSE") +
+  ggtitle("RMSE vs. Training Data Size")
+```
+
+**Observation**: The categorical variables of Genre, Rated, Language, Country, tomatoImage, Director, Actors are converted into dummy variables. If the number of unique categories in the variable is less than 10, all the unique categories are converted into dummy variables (e.g. Rated, tomatoImage). If the number of unique categories in the variable is more than 10, the top 10 most frequent categories are converted into dummy variables (e.g. Language, Director, Actors).
+
+A dummy variable represents the presence or absence of a specific category (e.g. Action, Adventure, or Comedy) in the category variable (e.g. Genre) in the data frame. To create dummy variables, the occurrence of each specific category is checked for each individual row of the category variable in the data frame. If the category is present, then the corresponding row in the dummy variable is encoded 1; otherwise the correponding row in the dummy variable is encoded 0. 
+
+ There are a total of 59 dummy variables created from the categorical variables of Genre, Rated, Language, Country, tomatoImage, Director, and Actors. After stepwise regression, a total of 26 dummy variables are kept in the final model with the smallest AIC values. The best mean test RMSE $1.34 * 10^8$ is observed with the 100% training data size. It is greater than that of Task 2 ($8.31 * 10^7$). 
+
+
+## 4. Numeric and categorical variables
+
+The prediction quality is improved as much as possible by including both numeric and non-numeric variables from **Tasks 2 & 3**.
+
+```{r warning = FALSE, message = FALSE, results='hide'}
+# TODO: Build & evaluate model 4 (numeric & converted non-numeric variables)
+numericDf <- subset(df, select = c(Gross, Year, imdbRating, imdbVotes, tomatoRotten, tomatoUserMeter, 
+                  tomatoUserReviews, Budget, Runtime_log, Budget_bin, Budget_log, 
+                  imdbVotes_log, tomatoUserReviews_log))
+categoricalDf <- subset(categoricalDf, select = c(Action, Adventure, Thriller, Fantasy, Sci.Fi, PG, 
+    PG.13, G, Spanish, French, Italian, Japanese, Canada, 
+    France, Spain, rotten, fresh, certified, Ridley.Scott, 
+    Steven.Spielberg, Robert.Rodriguez, Ron.Howard, Mark.Wahlberg, 
+    Adam.Sandler, Ben.Stiller, Johnny.Depp))
+combineDf <- cbind(numericDf, categoricalDf)
+
+# Create Training and Test data
+set.seed(72)  
+index <- sample(1:nrow(df), 0.8*nrow(df)) 
+df_training <- combineDf[index, ]  
+df_testing  <- combineDf[-index, ]
+
+# TODO: Build & evaluate model 1 (numeric variables only)
+model <- lm(Gross ~ ., data = df_training) ## model
+summary(model)
+
+# stepwise regression using the library MASS
+library(MASS)
+model.step <- stepAIC(model, direction = 'both')
+summary(model.step) # Summary of the best model
+```
+
+```{r}
+# ANOVA of the stepwise regression
+model.step$anova # ANOVA of the result 
+```
+
+```{r, warning=FALSE}
+# train the model with 10 data sizes, 10 times each
+result <- matrix(0, ncol = 4, nrow = 20)
+for (i in (1:10)) {
+  rmse_train <- c()
+  rmse_test <- c()
+  for (j in (1:10)) {
+    training <- training_subset(df_training, i)
+    model <- lm(Gross ~ Year + imdbRating + imdbVotes + tomatoRotten + tomatoUserMeter + 
+    tomatoUserReviews + Budget + Runtime_log + Budget_bin + Budget_log + 
+    tomatoUserReviews_log + Action + Adventure + Sci.Fi + PG + 
+    PG.13 + G + rotten + fresh + certified + Ridley.Scott + Ben.Stiller, 
+                data = training) ## final model
+    rmse_train <- c(rmse_train, rmse_subset(training, model))
+    rmse_test <- c(rmse_test, rmse_subset(df_testing, model))
+  }
+  result[(2*i - 1), ] <- c(i*10, "train", mean(rmse_train), sd(rmse_train))
+  result[2*i, ] <- c(i*10, "test", mean(rmse_test), sd(rmse_test))
+}
+
+# transform the result of rmse to data frame
+result <- data.frame(result, stringsAsFactors = FALSE)
+names(result) <- c("percent", "type", "mean", "sd")
+result$percent <- as.numeric(as.character(result$percent))
+result$mean <- as.numeric(as.character(result$mean))
+result$sd <- as.numeric(as.character(result$sd))
+tail(result, 2)
+
+# plot the result of rmse
+ggplot(result, aes(percent, mean)) +
+  geom_point(aes(color = type)) +
+  geom_line(aes(color = type)) +
+  geom_errorbar(aes(ymin=mean - sd, ymax=mean+sd, color = type), width=.1) +
+  theme_bw() +
+  xlab("Training Size (Percent)") + ylab("RMSE") +
+  ggtitle("RMSE vs. Training Data Size")
+```
+
+**Observation**: The observed training RMSE in Task 4 ($9.61 * 10 ^7$) is less than that in Tasks 2 ($9.74 * 10 ^7$) and 3 ($1.53 * 10 ^8$) when the training size is 100%. The observed testing RMSE in Task 4 ($8.17 * 10 ^7$) is less than that in Tasks 2 ($8.31 * 10 ^7$) and 3 ($1.34 * 10 ^8$) when the training size is 100%. 
+
+
+## 5. Additional features
+
+Aadditional features are created such as interactions (e.g. `is_genre_comedy` x `is_budget_greater_than_3M`) or deeper analysis of complex variables (e.g. text analysis of full-text columns like `Plot`).
+
+```{r, results='hide'}
+# TODO: Build & evaluate model 5 (numeric, non-numeric and additional features)
+combineDf <- cbind(numericDf, categoricalDf)
+
+# additional feature of interactions
+combineDf$Budget_bin_Action <- combineDf$Budget_bin * combineDf$Action
+combineDf$Budget_bin_Sci.Fi <- combineDf$Budget_bin * combineDf$Sci.Fi
+combineDf$Budget_bin_Adventure <- combineDf$Budget_bin * combineDf$Adventure
+combineDf$Budget_bin_Thriller <- combineDf$Budget_bin * combineDf$Thriller
+combineDf$Budget_bin_Fantasy <- combineDf$Budget_bin * combineDf$Fantasy
+
+combineDf$Budget_bin_PG <- combineDf$Budget_bin * combineDf$PG
+combineDf$Budget_bin_PG.13 <- combineDf$Budget_bin * combineDf$PG.13
+combineDf$Budget_bin_G <- combineDf$Budget_bin * combineDf$G
+
+combineDf$Budget_bin_fresh <- combineDf$Budget_bin * combineDf$fresh
+combineDf$Budget_bin_rotten <- combineDf$Budget_bin * combineDf$rotten
+
+# additional feature of Oscar or Golden Globe
+combineDf$Oscar <- ifelse(grepl(df$Awards, "Oscar"), 1, 0)
+combineDf$GoldenGlobe <- ifelse(grepl(df$Awards, "Golden Globe"), 1, 0)
+
+# additional features of wins and nominations
+getWin <- function(string) {
+  ## get the number before wins and the number after won
+  ##(\\d+) any number before the " win" substring, the thing in () is saved in \2
+  win1 <- gsub(".*(^|\\s)(\\d+)\\swin.*", "\\2", string, perl=TRUE)
+  win2 <- gsub("^Won\\s(\\d+).*", "\\1", string, perl=TRUE)
+  if (win1 != string & win2 != string) return (as.numeric(win1) + as.numeric(win2))
+  else if (win1 != string ) return (as.numeric(win1))
+  else return (0)
+}
+combineDf$Win <- sapply(df$Awards, getWin)
+
+getNomi <- function(string) {
+  ## get the number before nomination and the number after Nominated for
+  ##(\\d+) any number before the " nomination" substring, the thing in () is saved in \2
+  win1 <- gsub(".*(^|\\s)(\\d+)\\snomination.*", "\\2", string, perl=TRUE)
+  win2 <- gsub("^Nominated\\sfor\\s(\\d+).*", "\\1", string, perl=TRUE)
+  if (win1 != string & win2 != string) return (as.numeric(win1) + as.numeric(win2))
+  else if (win1 != string ) return (as.numeric(win1))
+  else return (0)
+}
+combineDf$Nomination <- sapply(df$Awards, getNomi)
+
+
+# Create Training and Test data
+set.seed(72)  
+index <- sample(1:nrow(df), 0.8*nrow(df)) 
+df_training <- combineDf[index, ]  
+df_testing  <- combineDf[-index, ]
+
+# TODO: Build & evaluate model 1 (numeric variables only)
+model <- lm(Gross ~ ., data = df_training) ## model
+summary(model)
+
+# stepwise regression using the library MASS
+model.step <- stepAIC(model, direction = 'both')
+summary(model.step) # Summary of the best model
+```
+
+
+```{r}
+# ANOVA of the stepwise regression
+model.step$anova # ANOVA of the result 
+```
+
+```{r, warning=FALSE}
+# train the model with 10 data sizes, 10 times each
+result <- matrix(0, ncol = 4, nrow = 20)
+for (i in (1:10)) {
+  rmse_train <- c()
+  rmse_test <- c()
+  for (j in (1:10)) {
+    training <- training_subset(df_training, i)
+    model <- lm(Gross ~ Year + imdbRating + imdbVotes + tomatoRotten + tomatoUserMeter + 
+    tomatoUserReviews + Budget + Runtime_log + Budget_log + tomatoUserReviews_log + 
+    Action + Thriller + Fantasy + Sci.Fi + PG.13 + Spanish + 
+    fresh + certified + Ben.Stiller + Budget_bin_Action + Budget_bin_Sci.Fi + 
+    Budget_bin_Adventure + Budget_bin_Thriller + Budget_bin_Fantasy + 
+    Budget_bin_PG + Budget_bin_PG.13 + Budget_bin_G + Budget_bin_fresh + 
+    Budget_bin_rotten + Win + Nomination, 
+                data = training) ## final model
+    rmse_train <- c(rmse_train, rmse_subset(training, model))
+    rmse_test <- c(rmse_test, rmse_subset(df_testing, model))
+  }
+  result[(2*i - 1), ] <- c(i*10, "train", mean(rmse_train), sd(rmse_train))
+  result[2*i, ] <- c(i*10, "test", mean(rmse_test), sd(rmse_test))
+}
+
+# transform the result of rmse to data frame
+result <- data.frame(result, stringsAsFactors = FALSE)
+names(result) <- c("percent", "type", "mean", "sd")
+result$percent <- as.numeric(as.character(result$percent))
+result$mean <- as.numeric(as.character(result$mean))
+result$sd <- as.numeric(as.character(result$sd))
+tail(result, 2)
+
+# plot the result of rmse
+ggplot(result, aes(percent, mean)) +
+  geom_point(aes(color = type)) +
+  geom_line(aes(color = type)) +
+  geom_errorbar(aes(ymin=mean - sd, ymax=mean+sd, color = type), width=.1) +
+  theme_bw() +
+  xlab("Training Size (Percent)") + ylab("RMSE") +
+  ggtitle("RMSE vs. Training Data Size")
+```
+
+**Observation**: Interaction term between the binning transformation of Budget (Budget_bin) and the dummy variables of Genre (Action, Adventure, Fantasy, Sci.Fi, Thriller), Rated (PG, PG.13, G) and tomatoImage (rotten, fresh) are added as new features. These featues are added because of the significant differences of budgets among the categories of Genre, Rated, and tomatoImage. 
+
+Dummy variables of whether the film is nominated or awarded Oscar and Golden Globe and numeric variables of the total numbers of awards and nominations are also added as new features. These features are added since awards and nominations are also associated with Gross. 
+
+The RMSE with training data size of 100% are listed in the following table. In summary, the RMSE gradually decreases in the following tasks: Task 3, Task 1, Task 2, Task 4, and Task 5.
+
+```{r, echo=TRUE, results='asis'}
+library(knitr)
+final <- data.frame(Task = c("Task1", "Task2", "Task3", "Task4", "Task5"), 
+                    Training = c("9.84e7", "9.74e7", "1.53e8", "9.61e7", "9.10e7"), 
+                    Testing = c("8.32e7", "8.31e7", "1.34e8", "8.17e7", "7.78e7"))
+
+kable(final)
+
+```
+
